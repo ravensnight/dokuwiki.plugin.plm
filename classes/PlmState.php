@@ -2,24 +2,38 @@
 
 class PlmState
 {
-    /** @var array */
-    private $state = [];
+    /**
+     * URL parameter containing the complete PLM state.
+     */
+    private const PARAMETER = 'plm';
 
-    public function __construct(
-        ?string $encoded = null
-    ) {
-        if ($encoded === null) {
-            global $INPUT;
+    /**
+     * Internal state.
+     */
+    private array $state = [];
 
-            if (
-                !isset($INPUT) ||
-                $INPUT === null
-            ) {
-                return;
-            }
+    public function __construct()
+    {
+        global $INPUT;
+
+        /*
+        * DokuWiki environment.
+        */
+        if ($INPUT !== null) {
 
             $encoded =
-                $INPUT->str('plm');
+                $INPUT->str(
+                    self::PARAMETER
+                );
+
+        } else {
+
+            /*
+            * Standalone / CLI test.
+            */
+            $encoded =
+                $_GET[self::PARAMETER]
+                ?? '';
         }
 
         if (
@@ -29,109 +43,88 @@ class PlmState
             return;
         }
 
-        $json =
-            $this->base64UrlDecode(
-                $encoded
-            );
-
-        if ($json === null) {
-            return;
-        }
-
-        $state =
-            json_decode(
-                $json,
-                true
-            );
-
-        if (!is_array($state)) {
-            return;
-        }
-
-        $this->state =
-            $state;
+        $this->decode(
+            (string) $encoded
+        );
     }
 
-    public function get(
-        string $path
+    /**
+     * Get the complete state.
+     */
+    public function get(): array
+    {
+        return $this->state;
+    }
+
+    /**
+     * Get all filters for a component.
+     *
+     * Example:
+     *
+     *     $state->getFilter('tablecompanies')
+     *
+     * returns:
+     *
+     *     [
+     *         'name' => 'Anycubic',
+     *     ]
+     */
+    public function getFilter(
+        string $name
+    ): array {
+        return
+            $this->state['filter'][$name]
+            ?? [];
+    }
+
+    /**
+     * Get one filter value.
+     */
+    public function getFilterValue(
+        string $name,
+        string $field
     ): string {
-        $parts =
-            explode(
-                '.',
-                $path
-            );
-
         $value =
-            $this->state;
+            $this->state['filter'][$name][$field]
+            ?? '';
 
-        foreach ($parts as $part) {
-
-            if (
-                !is_array($value) ||
-                !array_key_exists(
-                    $part,
-                    $value
-                )
-            ) {
-                return '';
-            }
-
-            $value =
-                $value[$part];
-        }
-
-        if (
-            $value === null ||
-            is_array($value)
-        ) {
+        if ($value === null) {
             return '';
         }
 
         return (string) $value;
     }
 
-    public function getFilter(
-        string $name
-    ): array {
-        if (
-            !isset(
-                $this->state['filter'][$name]
-            ) ||
-            !is_array(
-                $this->state['filter'][$name]
-            )
-        ) {
-            return [];
-        }
-
-        return
-            $this->state['filter'][$name];
-    }
-
-    public function setFilter(
+    /**
+     * Set one filter value.
+     *
+     * Empty values are removed.
+     */
+    public function setFilterValue(
         string $name,
         string $field,
         string $value
     ): void {
-        if (
-            !isset(
-                $this->state['filter']
-            ) ||
-            !is_array(
-                $this->state['filter']
-            )
-        ) {
+
+        if ($value === '') {
+
+            $this->clearFilterValue(
+                $name,
+                $field
+            );
+
+            return;
+        }
+
+        if (!isset(
+            $this->state['filter']
+        )) {
             $this->state['filter'] = [];
         }
 
-        if (
-            !isset(
-                $this->state['filter'][$name]
-            ) ||
-            !is_array(
-                $this->state['filter'][$name]
-            )
-        ) {
+        if (!isset(
+            $this->state['filter'][$name]
+        )) {
             $this->state['filter'][$name] = [];
         }
 
@@ -139,36 +132,71 @@ class PlmState
             $value;
     }
 
-    public function getState(): array
-    {
-        return $this->state;
+    /**
+     * Clear one filter value.
+     */
+    public function clearFilterValue(
+        string $name,
+        string $field
+    ): void {
+
+        if (
+            !isset(
+                $this->state['filter'][$name][$field]
+            )
+        ) {
+            return;
+        }
+
+        unset(
+            $this->state['filter'][$name][$field]
+        );
+
+        /*
+         * Remove empty component.
+         */
+        if (
+            empty(
+                $this->state['filter'][$name]
+            )
+        ) {
+            unset(
+                $this->state['filter'][$name]
+            );
+        }
+
+        /*
+         * Remove empty filter section.
+         */
+        if (
+            empty(
+                $this->state['filter']
+            )
+        ) {
+            unset(
+                $this->state['filter']
+            );
+        }
     }
 
+    /**
+     * Encode the current state for the URL.
+     *
+     * Uses URL-safe Base64 without "=" padding.
+     */
     public function encode(): string
     {
         $json =
             json_encode(
                 $this->state,
                 JSON_UNESCAPED_UNICODE |
-                JSON_UNESCAPED_SLASHES
+                JSON_UNESCAPED_SLASHES |
+                JSON_THROW_ON_ERROR
             );
 
-        if ($json === false) {
-            return '';
-        }
-
-        return
-            $this->base64UrlEncode(
-                $json
-            );
-    }
-
-    private function base64UrlEncode(
-        string $value
-    ): string {
         return rtrim(
             strtr(
-                base64_encode($value),
+                base64_encode($json),
                 '+/',
                 '-_'
             ),
@@ -176,37 +204,66 @@ class PlmState
         );
     }
 
-    private function base64UrlDecode(
-        string $value
-    ): ?string {
-        $value =
+    /**
+     * Decode a URL state.
+     */
+    private function decode(
+        string $encoded
+    ): void {
+
+        /*
+         * Restore standard Base64 alphabet.
+         */
+        $encoded =
             strtr(
-                $value,
+                $encoded,
                 '-_',
                 '+/'
             );
 
+        /*
+         * Restore padding.
+         */
         $padding =
-            strlen($value) % 4;
+            strlen($encoded) % 4;
 
-        if ($padding > 0) {
-            $value .=
-                str_repeat(
-                    '=',
-                    4 - $padding
-                );
+        if ($padding !== 0) {
+            $encoded .= str_repeat(
+                '=',
+                4 - $padding
+            );
         }
 
-        $decoded =
+        $json =
             base64_decode(
-                $value,
+                $encoded,
                 true
             );
 
-        if ($decoded === false) {
-            return null;
+        if ($json === false) {
+            return;
         }
 
-        return $decoded;
+        try {
+
+            $state =
+                json_decode(
+                    $json,
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR
+                );
+
+        } catch (Throwable $e) {
+
+            return;
+        }
+
+        if (!is_array($state)) {
+            return;
+        }
+
+        $this->state =
+            $state;
     }
 }

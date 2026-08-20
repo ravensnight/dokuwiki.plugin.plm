@@ -14,6 +14,17 @@ class PlmForm
     /** @var PlmState */
     private $state;
 
+    /**
+     * True when a PLM state reference used by the
+     * filter exists but contains no value.
+     */
+    private bool $filterStateMissing = false;
+
+    /**
+     * CSS class for a normal "nothing found" message.
+     */
+    private const EMPTY_CLASS = 'plm_empty';
+
     public function __construct(
         Doku_Renderer $renderer,
         PlmStruct $struct,
@@ -33,9 +44,11 @@ class PlmForm
         string $name,
         string $schema,
         string $filter,
-        string $content
+        string $content,
+        string $errortext = 'not found!'
     ): void {
-        if (empty($schema)) {
+
+        if ($schema === '') {
             $this->error(
                 'PLM form: parameter "schema" is required'
             );
@@ -47,10 +60,37 @@ class PlmForm
                 $content
             );
 
+        /*
+         * Expand references to PLM state.
+         *
+         * Example:
+         *
+         *     name=$tablecompanies.name
+         *
+         * becomes:
+         *
+         *     name=Any
+         */
         $filter =
             $this->expandFilter(
                 $filter
             );
+
+        /*
+         * A missing state value means that the requested
+         * record cannot be found.
+         *
+         * This is different from a completely empty filter,
+         * which means that a new global record should be edited.
+         */
+        if ($this->filterStateMissing) {
+
+            $this->renderEmpty(
+                $errortext
+            );
+
+            return;
+        }
 
         $fields =
             $this->getFields(
@@ -67,35 +107,48 @@ class PlmForm
             $filter,
             $fields,
             $actions,
-            $params
+            $params,
+            $errortext
         );
     }
 
     /**
-     * Expand URI parameters in the filter.
+     * Expand references to values stored in PlmState.
      */
     private function expandFilter(
         string $filter
     ): ?string {
+
+        /*
+         * Reset the state for every render.
+         */
+        $this->filterStateMissing = false;
+
         if ($filter === '') {
             return null;
         }
 
-        $hasEmptyParameter = false;
-
         $filter =
             preg_replace_callback(
-                '/&([a-zA-Z0-9_-]+)/',
-                function ($match)
-                    use (&$hasEmptyParameter) {
+                '/\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_.-]+)/',
+                function ($match) {
+
+                    $table =
+                        $match[1];
+
+                    $field =
+                        $match[2];
 
                     $value =
-                        $this->getUriParam(
-                            $match[1]
+                        $this->state->getFilterValue(
+                            $table,
+                            $field
                         );
 
                     if ($value === '') {
-                        $hasEmptyParameter = true;
+
+                        $this->filterStateMissing =
+                            true;
                     }
 
                     return $value;
@@ -103,7 +156,7 @@ class PlmForm
                 $filter
             );
 
-        if ($hasEmptyParameter) {
+        if ($this->filterStateMissing) {
             return null;
         }
 
@@ -112,15 +165,11 @@ class PlmForm
 
     /**
      * Parse field definitions.
-     *
-     * Example:
-     *
-     * field: ipn
-     * field: description readonly
      */
     private function getFields(
         array $params
     ): array {
+
         $fields = [];
 
         foreach (
@@ -157,25 +206,11 @@ class PlmForm
 
     /**
      * Parse action definitions.
-     *
-     * Supported actions:
-     *
-     * create
-     * update
-     * delete
-     * redirect
-     *
-     * Examples:
-     *
-     * action: create "Create"
-     * action: update "Save"
-     * action: delete "Delete"
-     * action: redirect "Open" :intern:plm:partview
-     * action: redirect "Open" :intern:plm:partview?ipn=$ipn
      */
     private function getActions(
         array $params
     ): array {
+
         $actions = [];
 
         foreach (
@@ -243,8 +278,10 @@ class PlmForm
         ?string $filter,
         array $fields,
         array $actions,
-        array $params
+        array $params,
+        string $errortext
     ): void {
+
         try {
 
             /*
@@ -260,8 +297,13 @@ class PlmForm
 
                 if ($record === null) {
 
-                    $this->error(
-                        'PLM form: no Struct record found.'
+                    /*
+                     * No matching record is a normal
+                     * application state, not a technical
+                     * error.
+                     */
+                    $this->renderEmpty(
+                        $errortext
                     );
 
                     return;
@@ -302,11 +344,50 @@ class PlmForm
 
         } catch (Throwable $e) {
 
+            /*
+             * Technical errors remain real errors.
+             */
             $this->error(
                 'PLM form: ' .
                 $e->getMessage()
             );
         }
+    }
+
+    /**
+     * Render the normal "nothing found" message.
+     *
+     * The text is parsed as DokuWiki content and
+     * therefore supports normal DokuWiki markup.
+     */
+    private function renderEmpty(
+        string $text
+    ): void {
+
+        if (trim($text) === '') {
+            return;
+        }
+
+        $instructions =
+            p_get_instructions(
+                $text
+            );
+
+        $info = [];
+
+        $html =
+            p_render(
+                'xhtml',
+                $instructions,
+                $info
+            );
+
+        $this->renderer->doc .=
+            '<div class="' .
+            self::EMPTY_CLASS .
+            '">' .
+            $html .
+            '</div>';
     }
 
     /**
@@ -321,6 +402,7 @@ class PlmForm
         array $actions,
         array $params
     ): void {
+
         global $ID;
 
         $formAction =
@@ -336,8 +418,7 @@ class PlmForm
             '">';
 
         /*
-         * Tell the PLM action plugin this is a form
-         * submission.
+         * Form submission marker.
          */
         $html .=
             '<input type="hidden" ' .
@@ -353,7 +434,7 @@ class PlmForm
             '">';
 
         /*
-         * Filter.
+         * Expanded filter.
          */
         if ($filter !== null) {
 
@@ -374,18 +455,9 @@ class PlmForm
         $html .=
             ob_get_clean();
 
-        /*
-         * Explicit fields.
-         */
         $hasExplicitFields =
             !empty($fields);
 
-        /*
-         * Any action exists.
-         *
-         * Without an action the complete form is
-         * readonly.
-         */
         $hasActions =
             !empty($actions);
 
@@ -397,51 +469,42 @@ class PlmForm
             as $column
         ) {
 
-            $name =
+            $fieldName =
                 $column->getLabel();
 
-            /*
-             * If field definitions exist, only
-             * explicitly mentioned fields are shown.
-             *
-             * Otherwise all fields are shown.
-             */
             if (
                 $hasExplicitFields &&
-                !isset($fields[$name])
+                !isset($fields[$fieldName])
             ) {
                 continue;
             }
 
-            if (!isset($data[$name])) {
+            if (!isset($data[$fieldName])) {
                 continue;
             }
 
             $value =
-                $data[$name];
+                $data[$fieldName];
 
             $editor =
                 $value->getValueEditor(
-                    'plm_form[' . $name . ']',
-                    'plm_' . $name
+                    'plm_form[' . $fieldName . ']',
+                    'plm_' . $fieldName
                 );
 
             $label =
                 $column->getTranslatedLabel();
 
             /*
-             * A field is readonly if:
-             *
-             * 1. no action exists
-             * 2. explicitly declared readonly
+             * No action means readonly.
              */
             $readonly =
                 !$hasActions;
 
             if (
                 $hasExplicitFields &&
-                isset($fields[$name]) &&
-                $fields[$name]['readonly']
+                isset($fields[$fieldName]) &&
+                $fields[$fieldName]['readonly']
             ) {
                 $readonly = true;
             }
@@ -469,7 +532,7 @@ class PlmForm
         }
 
         /*
-         * Determine visible actions.
+         * Visible actions.
          */
         $visibleActions = [];
 
@@ -478,10 +541,6 @@ class PlmForm
             $action =
                 $definition['action'];
 
-            /*
-             * CREATE only makes sense when there is
-             * no existing record.
-             */
             if (
                 $action === 'create' &&
                 $filter !== null
@@ -489,29 +548,18 @@ class PlmForm
                 continue;
             }
 
-            /*
-             * UPDATE and DELETE require an existing
-             * record.
-             */
             if (
                 in_array(
                     $action,
-                    ['update', 'delete'],
+                    [
+                        'update',
+                        'delete'
+                    ],
                     true
                 ) &&
                 $filter === null
             ) {
                 continue;
-            }
-
-            /*
-             * REDIRECT is always available.
-             *
-             * It does not create, update or delete
-             * anything.
-             */
-            if ($action === 'redirect') {
-                // always visible
             }
 
             $visibleActions[] =
@@ -539,12 +587,6 @@ class PlmForm
                     ) .
                     '"';
 
-                /*
-                 * The redirect belonging to this
-                 * action is also stored as a data
-                 * attribute for possible client-side
-                 * use.
-                 */
                 if (
                     $definition['redirect'] !== ''
                 ) {
@@ -570,8 +612,7 @@ class PlmForm
         }
 
         /*
-         * Redirect definitions MUST be inside
-         * the form.
+         * Redirect definitions.
          */
         $html .=
             $this->renderRedirectInputs(
@@ -591,6 +632,7 @@ class PlmForm
     private function renderRedirectInputs(
         array $actions
     ): string {
+
         $html = '';
 
         foreach ($actions as $definition) {
@@ -617,6 +659,7 @@ class PlmForm
     private function makeReadonly(
         string $html
     ): string {
+
         $html =
             preg_replace(
                 '/<input\b/i',
@@ -645,23 +688,12 @@ class PlmForm
     }
 
     /**
-     * Get URI parameter.
-     */
-    private function getUriParam(
-        string $name
-    ): string {
-        global $INPUT;
-
-        return
-            $INPUT->str($name) ?? '';
-    }
-
-    /**
-     * Display an error.
+     * Display a technical error.
      */
     private function error(
         string $message
     ): void {
+
         $this->renderer->doc .=
             '<div class="error">' .
             hsc($message) .

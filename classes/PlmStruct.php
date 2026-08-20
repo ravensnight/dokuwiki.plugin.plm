@@ -83,6 +83,7 @@ class PlmStruct
         array $fields,
         ?string $filter = null
     ): array {
+
         if ($schema === '') {
             throw new \RuntimeException(
                 'No Struct schema specified.'
@@ -97,7 +98,9 @@ class PlmStruct
 
         $fields =
             array_values(
-                array_unique($fields)
+                array_unique(
+                    $fields
+                )
             );
 
         if (
@@ -161,26 +164,39 @@ class PlmStruct
         string $schema,
         string $filter
     ): ?array {
+
         if (trim($filter) === '') {
             throw new \RuntimeException(
                 'Cannot find a Struct record without a filter.'
             );
         }
 
+        /*
+         * Determine the field used by the filter.
+         */
+        $parsed =
+            $this->parseFilter(
+                $filter
+            );
+
+        $filterField =
+            $parsed[0];
+
+        /*
+         * Use the same search mechanism as PlmSelect.
+         */
         $result =
             $this->search(
                 $schema,
-                ['*'],
+                [$filterField],
                 $filter
             );
 
         $search =
             $result['search'];
 
-        $search->setLimit(1);
-
         $rows =
-            $search->getRows();
+            $result['rows'];
 
         if (empty($rows)) {
             return null;
@@ -193,9 +209,16 @@ class PlmStruct
             $search->getRids();
 
         return [
-            'row' => $rows[0],
-            'pid' => $pids[0] ?? '',
-            'rid' => (int) ($rids[0] ?? 0),
+            'row' =>
+                $rows[0],
+
+            'pid' =>
+                $pids[0] ?? '',
+
+            'rid' =>
+                (int) (
+                    $rids[0] ?? 0
+                ),
         ];
     }
 
@@ -207,6 +230,7 @@ class PlmStruct
         string $pid,
         int $rid
     ) {
+
         $schemaObject =
             new \dokuwiki\plugin\struct\meta\Schema(
                 $schema
@@ -264,6 +288,7 @@ class PlmStruct
     public function newGlobalAccess(
         string $schema
     ) {
+
         return
             \dokuwiki\plugin\struct\meta\AccessTable::getGlobalAccess(
                 $schema
@@ -276,7 +301,9 @@ class PlmStruct
     public function getData(
         $access
     ): array {
-        return $access->getData();
+
+        return
+            $access->getData();
     }
 
     /**
@@ -285,7 +312,9 @@ class PlmStruct
     public function getDataArray(
         $access
     ): array {
-        return $access->getDataArray();
+
+        return
+            $access->getDataArray();
     }
 
     /**
@@ -295,6 +324,7 @@ class PlmStruct
         $access,
         array $data
     ): void {
+
         $validator =
             $access->getValidator(
                 $data
@@ -334,12 +364,11 @@ class PlmStruct
 
     /**
      * Delete Struct data.
-     *
-     * Struct 2026-07-08 provides clearData()
-     * on AccessTable and its concrete implementations.
      */
-    public function delete($access): void
-    {
+    public function delete(
+        $access
+    ): void {
+
         $access->clearData();
     }
 }

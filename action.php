@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/classes/PlmStruct.php';
+require_once __DIR__ . '/classes/PlmState.php';
 
 class action_plugin_plm extends DokuWiki_Action_Plugin
 {
@@ -11,25 +12,80 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             'DOKUWIKI_STARTED',
             'BEFORE',
             $this,
-            'handlePost'
+            'handleRequest'
         );
     }
 
-    public function handlePost(
+    /**
+     * Handle PLM requests before DokuWiki renders
+     * the current page.
+     */
+    public function handleRequest(
         Doku_Event $event
     ) {
         global $INPUT;
 
+        /*
+         * ---------------------------------------------------------
+         * TABLE FILTER
+         * ---------------------------------------------------------
+         */
+
+        $table =
+            $INPUT->str(
+                'plm_filter_table'
+            );
+
+        $field =
+            $INPUT->str(
+                'plm_filter_field'
+            );
+
+        /*
+         * No table filter submitted.
+         */
+        if (
+            $table !== null &&
+            $table !== '' &&
+            $field !== null &&
+            $field !== ''
+        ) {
+
+            $this->processTableFilter(
+                $table,
+                $field,
+                $INPUT->str(
+                    'plm_filter_value'
+                ) ?? ''
+            );
+
+            /*
+             * processTableFilter() redirects and
+             * therefore never returns.
+             */
+            return;
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * POST / PLM FORM
+         * ---------------------------------------------------------
+         */
+
         if (
             strtoupper(
-                $INPUT->server->str('REQUEST_METHOD')
+                $INPUT->server->str(
+                    'REQUEST_METHOD'
+                )
             ) !== 'POST'
         ) {
             return;
         }
 
         if (
-            $INPUT->post->str('plm_form_submit') !== '1'
+            $INPUT->post->str(
+                'plm_form_submit'
+            ) !== '1'
         ) {
             return;
         }
@@ -49,7 +105,111 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
     }
 
     /**
-     * Process a PLM action.
+     * Process a submitted table filter.
+     *
+     * Temporary parameters:
+     *
+     *     plm_filter_table
+     *     plm_filter_field
+     *     plm_filter_value
+     *
+     * are converted into the encoded PLM state.
+     *
+     * The browser is then redirected to:
+     *
+     *     ?plm=<encoded-state>
+     */
+    private function processTableFilter(
+        string $table,
+        string $field,
+        string $value
+    ): void {
+
+        global $ID;
+
+        /*
+         * Validate table name.
+         */
+        if (!preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $table
+        )) {
+            return;
+        }
+
+        /*
+         * Validate field name.
+         */
+        if (!preg_match(
+            '/^[a-zA-Z0-9_.-]+$/',
+            $field
+        )) {
+            return;
+        }
+
+        /*
+         * Load existing PLM state.
+         */
+        $state =
+            new PlmState();
+
+        /*
+         * Store the submitted filter.
+         */
+        $state->setFilterValue(
+            $table,
+            $field,
+            $value
+        );
+
+        /*
+         * Encode complete state.
+         */
+        $encoded =
+            $state->encode();
+
+        /*
+         * Build clean URL for current page.
+         *
+         * Do NOT copy the old query parameters.
+         */
+        $url =
+            wl(
+                $ID,
+                [],
+                true
+            );
+
+        /*
+         * Append only the encoded PLM state.
+         */
+        if ($encoded !== '') {
+
+            $separator =
+                str_contains(
+                    $url,
+                    '?'
+                )
+                    ? '&'
+                    : '?';
+
+            $url .=
+                $separator .
+                'plm=' .
+                rawurlencode(
+                    $encoded
+                );
+        }
+
+        send_redirect(
+            $url
+        );
+
+        exit;
+    }
+
+    /**
+     * Process a PLM form action.
      */
     private function processSubmit(): void
     {
@@ -76,18 +236,16 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 )
             );
 
-        if (
-            !in_array(
-                $action,
-                [
-                    'create',
-                    'update',
-                    'delete',
-                    'redirect'
-                ],
-                true
-            )
-        ) {
+        if (!in_array(
+            $action,
+            [
+                'create',
+                'update',
+                'delete',
+                'redirect'
+            ],
+            true
+        )) {
             throw new \RuntimeException(
                 'Invalid PLM action.'
             );
@@ -124,13 +282,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
-         * ---------------------------------------------------------
          * REDIRECT
-         * ---------------------------------------------------------
-         *
-         * Redirect does not modify the Struct record.
-         *
-         * It operates only on the submitted form values.
          */
         if ($action === 'redirect') {
 
@@ -157,8 +309,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             new PlmStruct();
 
         /*
-         * Validate schema permissions for actions
-         * which modify Struct data.
+         * Check schema permissions.
          */
         $schemaObject =
             new \dokuwiki\plugin\struct\meta\Schema(
@@ -172,9 +323,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
-         * ---------------------------------------------------------
          * CREATE
-         * ---------------------------------------------------------
          */
         if ($action === 'create') {
 
@@ -216,11 +365,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $data
             );
 
-            /*
-             * Re-read data after saving so that
-             * generated/default values are available
-             * for redirect expansion.
-             */
             $data =
                 $struct->getDataArray(
                     $access
@@ -236,9 +380,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
-         * ---------------------------------------------------------
-         * UPDATE / DELETE
-         * ---------------------------------------------------------
+         * UPDATE / DELETE require an existing record.
          */
         if ($filter === null) {
             throw new \RuntimeException(
@@ -267,16 +409,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
 
         /*
-         * ---------------------------------------------------------
          * DELETE
-         * ---------------------------------------------------------
          */
         if ($action === 'delete') {
 
-            /*
-             * Read the values before deletion so they
-             * can still be used in a redirect.
-             */
             $data =
                 $struct->getDataArray(
                     $access
@@ -296,9 +432,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
-         * ---------------------------------------------------------
          * UPDATE
-         * ---------------------------------------------------------
          */
         $data =
             $struct->getDataArray(
@@ -327,10 +461,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $data
         );
 
-        /*
-         * Re-read the saved values for redirect
-         * placeholder expansion.
-         */
         $data =
             $struct->getDataArray(
                 $access
@@ -345,29 +475,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
     /**
      * Redirect using submitted form values.
-     *
-     * Two modes exist.
-     *
-     * 1. No $field placeholder:
-     *
-     *    action: redirect "Open" :intern:plm:partview
-     *
-     *    All submitted plm_form fields are appended.
-     *
-     * 2. One or more $field placeholders:
-     *
-     *    action: redirect "Open" :intern:plm:partview?ipn=$ipn
-     *
-     *    Only fields referenced by $field are transferred.
-     *
-     * Technical hidden fields such as:
-     *
-     * plm_schema
-     * plm_filter
-     * security token
-     *
-     * are never transferred because only plm_form
-     * is inspected.
      */
     private function redirectForm(
         array $posted,
@@ -375,9 +482,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         string $defaultTarget
     ): void {
 
-        /*
-         * Determine redirect target.
-         */
         $target =
             trim(
                 $redirects['redirect'] ?? ''
@@ -388,9 +492,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $defaultTarget;
         }
 
-        /*
-         * Find explicit $field references.
-         */
         preg_match_all(
             '/\$([a-zA-Z_][a-zA-Z0-9_-]*)/',
             $target,
@@ -404,24 +505,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 )
             );
 
-        /*
-         * ---------------------------------------------------------
-         * Explicit $field mode.
-         * ---------------------------------------------------------
-         *
-         * Example:
-         *
-         * :intern:plm:partview?ipn=$ipn
-         *
-         * becomes:
-         *
-         * :intern:plm:partview?ipn=PRD
-         */
         if (!empty($referencedFields)) {
 
             foreach (
-                $referencedFields
-                as $field
+                $referencedFields as $field
             ) {
 
                 $value =
@@ -432,19 +519,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                         $value
                     );
 
-                /*
-                 * Encode the value because it is being
-                 * inserted into a URI.
-                 */
-                $encoded =
-                    rawurlencode(
-                        $value
-                    );
-
                 $target =
                     str_replace(
                         '$' . $field,
-                        $encoded,
+                        rawurlencode($value),
                         $target
                     );
             }
@@ -457,14 +535,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             return;
         }
 
-        /*
-         * ---------------------------------------------------------
-         * No explicit $field references.
-         * ---------------------------------------------------------
-         *
-         * Therefore all submitted form fields are
-         * appended as query parameters.
-         */
         $target =
             $this->appendFormParameters(
                 $target,
@@ -477,12 +547,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         );
     }
 
-    /**
-     * Append form values to a redirect target.
-     *
-     * Existing query parameters are preserved and
-     * are not overwritten by form values.
-     */
     private function appendFormParameters(
         string $target,
         array $posted
@@ -504,7 +568,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $existing = [];
 
         if ($query !== '') {
-
             parse_str(
                 $query,
                 $existing
@@ -519,9 +582,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
-            /*
-             * Only sane URI parameter names.
-             */
             if (!preg_match(
                 '/^[a-zA-Z_][a-zA-Z0-9_-]*$/',
                 $field
@@ -529,9 +589,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
-            /*
-             * Explicit target parameters win.
-             */
             if (array_key_exists(
                 $field,
                 $existing
@@ -560,10 +617,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
     }
 
-    /**
-     * Convert a submitted form value to a scalar
-     * URI value.
-     */
     private function stringifyFormValue(
         $value
     ): string {
@@ -589,31 +642,28 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 }
             }
 
-            return
-                implode(
-                    ',',
-                    $values
-                );
+            return implode(
+                ',',
+                $values
+            );
         }
 
         if ($value === null) {
             return '';
         }
 
-        return
-            (string) $value;
+        return (string) $value;
     }
 
     /**
      * Redirect after CREATE / UPDATE / DELETE.
-     *
-     * Struct fields are expanded using $field.
      */
     private function redirect(
         string $action,
         array $data,
         string $defaultTarget
     ): void {
+
         global $INPUT;
 
         $redirects =
@@ -631,9 +681,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $defaultTarget;
         }
 
-        /*
-         * Expand Struct field placeholders.
-         */
         $target =
             preg_replace_callback(
                 '/\$([a-zA-Z_][a-zA-Z0-9_-]*)/',
@@ -642,12 +689,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                     $field =
                         $match[1];
 
-                    if (
-                        !array_key_exists(
-                            $field,
-                            $data
-                        )
-                    ) {
+                    if (!array_key_exists(
+                        $field,
+                        $data
+                    )) {
                         return '';
                     }
 
@@ -661,7 +706,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                         );
                     }
 
-                    return (string)$value;
+                    return (string) $value;
                 },
                 $target
             );
@@ -674,22 +719,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
     /**
      * Convert a PLM target into a DokuWiki URL.
-     *
-     * IMPORTANT:
-     *
-     * The target is NOT passed as a complete page ID to wl().
-     *
-     * Instead:
-     *
-     *   :intern:plm:partmgr?ipn=PRD
-     *
-     * is split into:
-     *
-     *   page   = :intern:plm:partmgr
-     *   params = ['ipn' => 'PRD']
-     *
-     * This prevents the '?' from being encoded as
-     * part of the page ID.
      */
     private function sendTargetRedirect(
         string $target,
@@ -706,9 +735,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $defaultTarget;
         }
 
-        /*
-         * Separate page ID from query string.
-         */
         $parts =
             explode(
                 '?',
@@ -724,9 +750,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $query =
             $parts[1] ?? '';
 
-        /*
-         * Clean ONLY the DokuWiki page ID.
-         */
         $page =
             cleanID(
                 $page
@@ -734,10 +757,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
         if ($page === '') {
 
-            /*
-             * Fallback target may theoretically contain
-             * a query string as well, so split it again.
-             */
             $fallbackParts =
                 explode(
                     '?',
@@ -756,9 +775,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $fallbackParts[1] ?? '';
         }
 
-        /*
-         * Parse query parameters.
-         */
         $params = [];
 
         if ($query !== '') {
@@ -773,12 +789,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             }
         }
 
-        /*
-         * Let DokuWiki create the canonical URL.
-         *
-         * The page ID and URL parameters are passed
-         * separately.
-         */
         $url =
             wl(
                 $page,

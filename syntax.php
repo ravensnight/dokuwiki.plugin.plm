@@ -86,6 +86,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             return false;
         }
 
+        /*
+         * Process a submitted table filter
+         * before rendering the page.
+         */
+        $this->processStateRequest();
+
         static $blocks = [];
         static $states = [];
 
@@ -205,6 +211,143 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         return false;
     }
 
+    /**
+     * Process a submitted table filter.
+     *
+     * The filter form uses POST.
+     *
+     * POST:
+     *
+     *     plm_filter_table
+     *     plm_filter_field
+     *     plm_filter_value
+     *
+     * becomes:
+     *
+     *     ?plm=<encoded-state>
+     */
+    private function processStateRequest(): void
+    {
+        global $INPUT;
+        global $ID;
+
+        /*
+         * Only process POST requests.
+         */
+        if (
+            strtoupper(
+                $INPUT->server->str('REQUEST_METHOD')
+            ) !== 'POST'
+        ) {
+            return;
+        }
+
+        $table =
+            $INPUT->post->str(
+                'plm_filter_table'
+            );
+
+        $field =
+            $INPUT->post->str(
+                'plm_filter_field'
+            );
+
+        /*
+         * No PLM filter submission.
+         */
+        if (
+            $table === null ||
+            $table === '' ||
+            $field === null ||
+            $field === ''
+        ) {
+            return;
+        }
+
+        $value =
+            $INPUT->post->str(
+                'plm_filter_value'
+            ) ?? '';
+
+        /*
+         * Validate table name.
+         */
+        if (!preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $table
+        )) {
+            return;
+        }
+
+        /*
+         * Validate field name.
+         */
+        if (!preg_match(
+            '/^[a-zA-Z0-9_.-]+$/',
+            $field
+        )) {
+            return;
+        }
+
+        /*
+         * Load existing state.
+         */
+        $state =
+            new PlmState();
+
+        /*
+         * Update filter value.
+         */
+        $state->setFilterValue(
+            $table,
+            $field,
+            $value
+        );
+
+        /*
+         * Encode state.
+         */
+        $encoded =
+            $state->encode();
+
+        /*
+         * Build clean URL for current page.
+         */
+        $url =
+            wl(
+                $ID,
+                [],
+                true
+            );
+
+        /*
+         * Add only the PLM state.
+         */
+        if ($encoded !== '') {
+
+            $separator =
+                str_contains(
+                    $url,
+                    '?'
+                )
+                    ? '&'
+                    : '?';
+
+            $url .=
+                $separator .
+                'plm=' .
+                rawurlencode(
+                    $encoded
+                );
+        }
+
+        send_redirect(
+            $url
+        );
+
+        exit;
+    }
+
     private function renderBlock(
         Doku_Renderer $renderer,
         string $header,
@@ -242,6 +385,9 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             $filter =
                 $definition['filter'];
 
+            $errortext =
+                $definition['errortext'];
+
             switch ($type) {
 
                 case 'table':
@@ -264,7 +410,8 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                         $name,
                         $schema,
                         $filter,
-                        $content
+                        $content,
+                        $errortext
                     );
 
                     return true;
@@ -289,7 +436,8 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                         $name,
                         $schema,
                         $filter,
-                        $content
+                        $content,
+                        $errortext
                     );
 
                     return true;
@@ -310,7 +458,8 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                         $name,
                         $schema,
                         $filter,
-                        $content
+                        $content,
+                        $errortext
                     );
 
                     return true;
@@ -339,10 +488,34 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
     }
 
     /**
-     * Parse:
+     * Parse PLM header.
      *
-     *     table > tablecompanies | plm_companies
-     *     table > tablecompanies | plm_companies[...]
+     * Supported syntax:
+     *
+     *     select > id | plm_companies[name=Any]
+     *
+     *     select > id | plm_companies[name=Any]
+     *     "No company found"
+     *
+     *     select > id | plm_companies
+     *     "No company selected"
+     *
+     *     select > id | plm_companies[name=Any] "No company found"
+     *
+     * The components are:
+     *
+     *     type
+     *     >
+     *     name
+     *     |
+     *     schema
+     *     [filter]
+     *     "errortext"
+     *
+     * Filter and errortext are optional.
+     *
+     * If no errortext is supplied, the special
+     * default value "not found!" is used.
      */
     private function parseHeader(
         string $header
@@ -351,18 +524,63 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         $header =
             trim($header);
 
+        /*
+         * Basic structure:
+         *
+         * type > name | schema
+         *
+         * followed optionally by:
+         *
+         * [filter]
+         *
+         * and/or:
+         *
+         * "errortext"
+         */
         if (!preg_match(
-            '/^([a-zA-Z0-9_-]+)'
+            '/^'
+            . '([a-zA-Z0-9_-]+)'
             . '\s*>\s*'
             . '([a-zA-Z0-9_-]+)'
             . '\s*\|\s*'
             . '([a-zA-Z0-9_-]+)'
             . '(?:\s*\[([^\]]*)\])?'
-            . '\s*$/',
+            . '(?:\s+"((?:\\\\.|[^"\\\\])*)")?'
+            . '\s*$'
+            . '/',
             $header,
             $match
         )) {
             return null;
+        }
+
+        /*
+         * Filter.
+         */
+        $filter =
+            isset($match[4])
+                ? trim($match[4])
+                : '';
+
+        /*
+         * Error text.
+         *
+         * Decode escaped characters inside the
+         * quoted string.
+         */
+        if (
+            isset($match[5])
+        ) {
+
+            $errortext =
+                stripcslashes(
+                    $match[5]
+                );
+
+        } else {
+
+            $errortext =
+                'not found!';
         }
 
         return [
@@ -382,9 +600,10 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                 ),
 
             'filter' =>
-                isset($match[4])
-                    ? trim($match[4])
-                    : '',
+                $filter,
+
+            'errortext' =>
+                $errortext,
         ];
     }
 
