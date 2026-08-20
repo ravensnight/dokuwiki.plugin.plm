@@ -26,52 +26,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         global $INPUT;
 
         /*
-         * ---------------------------------------------------------
-         * TABLE FILTER
-         * ---------------------------------------------------------
+         * Only POST requests are relevant.
          */
-
-        $table =
-            $INPUT->str(
-                'plm_filter_table'
-            );
-
-        $field =
-            $INPUT->str(
-                'plm_filter_field'
-            );
-
-        /*
-         * No table filter submitted.
-         */
-        if (
-            $table !== null &&
-            $table !== '' &&
-            $field !== null &&
-            $field !== ''
-        ) {
-
-            $this->processTableFilter(
-                $table,
-                $field,
-                $INPUT->str(
-                    'plm_filter_value'
-                ) ?? ''
-            );
-
-            /*
-             * processTableFilter() redirects and
-             * therefore never returns.
-             */
-            return;
-        }
-
-        /*
-         * ---------------------------------------------------------
-         * POST / PLM FORM
-         * ---------------------------------------------------------
-         */
-
         if (
             strtoupper(
                 $INPUT->server->str(
@@ -81,6 +37,83 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         ) {
             return;
         }
+
+        /*
+         * ---------------------------------------------------------
+         * PLM TABLE ACTION
+         * ---------------------------------------------------------
+         *
+         * Table actions:
+         *
+         *     plm_action=filter
+         *     plm_action=create
+         *
+         * Table filter fields:
+         *
+         *     plm_filter[field]
+         *
+         * Table create fields:
+         *
+         *     plm_create[field]
+         *
+         * The namespaces are deliberately different.
+         */
+
+        $tableAction =
+            strtolower(
+                trim(
+                    $INPUT->post->str(
+                        'plm_action'
+                    )
+                )
+            );
+
+        if ($tableAction === 'filter') {
+
+            try {
+
+                $this->processTableFilter();
+
+            } catch (Throwable $e) {
+
+                msg(
+                    'PLM table: ' .
+                    $e->getMessage(),
+                    -1
+                );
+            }
+
+            return;
+        }
+
+        if ($tableAction === 'create') {
+
+            try {
+
+                $this->processTableCreate();
+
+            } catch (Throwable $e) {
+
+                msg(
+                    'PLM table: ' .
+                    $e->getMessage(),
+                    -1
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * PLM FORM
+         * ---------------------------------------------------------
+         *
+         * Standalone forms continue to use:
+         *
+         *     plm_form_submit=1
+         *     plm_form[field]
+         */
 
         if (
             $INPUT->post->str(
@@ -105,73 +138,121 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
     }
 
     /**
-     * Process a submitted table filter.
+     * -------------------------------------------------------------
+     * TABLE FILTER
+     * -------------------------------------------------------------
      *
-     * Temporary parameters:
+     * Expected POST:
      *
-     *     plm_filter_table
-     *     plm_filter_field
-     *     plm_filter_value
-     *
-     * are converted into the encoded PLM state.
-     *
-     * The browser is then redirected to:
-     *
-     *     ?plm=<encoded-state>
+     *     plm_action=filter
+     *     plm_table=<table name>
+     *     plm_filter[field]=<value>
      */
-    private function processTableFilter(
-        string $table,
-        string $field,
-        string $value
-    ): void {
-
-        global $ID;
+    private function processTableFilter(): void
+    {
+        global $INPUT, $ID;
 
         /*
-         * Validate table name.
+         * Security token.
          */
+        if (!checkSecurityToken()) {
+            throw new \RuntimeException(
+                'Invalid security token.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * TABLE
+         * ---------------------------------------------------------
+         */
+
+        $table =
+            trim(
+                $INPUT->post->str(
+                    'plm_table'
+                )
+            );
+
+        if ($table === '') {
+            throw new \RuntimeException(
+                'No PLM table specified.'
+            );
+        }
+
         if (!preg_match(
             '/^[a-zA-Z0-9_-]+$/',
             $table
         )) {
-            return;
+            throw new \RuntimeException(
+                'Invalid PLM table name.'
+            );
         }
 
         /*
-         * Validate field name.
+         * ---------------------------------------------------------
+         * FILTERS
+         * ---------------------------------------------------------
          */
-        if (!preg_match(
-            '/^[a-zA-Z0-9_.-]+$/',
-            $field
-        )) {
-            return;
+
+        $filters =
+            $INPUT->post->arr(
+                'plm_filter'
+            );
+
+        if (!is_array($filters)) {
+            $filters = [];
         }
 
-        /*
-         * Load existing PLM state.
-         */
         $state =
             new PlmState();
 
         /*
-         * Store the submitted filter.
+         * Store submitted filters.
+         *
+         * Empty values are stored deliberately so
+         * an existing filter can be cleared.
          */
-        $state->setFilterValue(
-            $table,
-            $field,
-            $value
-        );
+        foreach (
+            $filters as $field => $value
+        ) {
+
+            if (!is_string($field)) {
+                continue;
+            }
+
+            if (!preg_match(
+                '/^[a-zA-Z0-9_.-]+$/',
+                $field
+            )) {
+                continue;
+            }
+
+            if (
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
+            $state->setFilterValue(
+                $table,
+                $field,
+                (string) $value
+            );
+        }
 
         /*
-         * Encode complete state.
+         * ---------------------------------------------------------
+         * ENCODE STATE
+         * ---------------------------------------------------------
          */
+
         $encoded =
             $state->encode();
 
         /*
          * Build clean URL for current page.
-         *
-         * Do NOT copy the old query parameters.
          */
         $url =
             wl(
@@ -180,9 +261,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 true
             );
 
-        /*
-         * Append only the encoded PLM state.
-         */
         if ($encoded !== '') {
 
             $separator =
@@ -209,7 +287,264 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
     }
 
     /**
-     * Process a PLM form action.
+     * -------------------------------------------------------------
+     * TABLE CREATE
+     * -------------------------------------------------------------
+     *
+     * Expected POST:
+     *
+     *     plm_action=create
+     *     plm_table=<table name>
+     *     plm_schema=<schema>
+     *     plm_create[field]=<value>
+     *     plm_redirects[create]=<target>
+     */
+    private function processTableCreate(): void
+    {
+        global $INPUT, $ID;
+
+        /*
+         * Security token.
+         */
+        if (!checkSecurityToken()) {
+            throw new \RuntimeException(
+                'Invalid security token.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * TABLE
+         * ---------------------------------------------------------
+         *
+         * The table name is not required for creating
+         * the Struct record itself, but it is required
+         * as part of the table POST contract.
+         */
+        $table =
+            trim(
+                $INPUT->post->str(
+                    'plm_table'
+                )
+            );
+
+        if ($table === '') {
+            throw new \RuntimeException(
+                'No PLM table specified.'
+            );
+        }
+
+        if (!preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $table
+        )) {
+            throw new \RuntimeException(
+                'Invalid PLM table name.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * SCHEMA
+         * ---------------------------------------------------------
+         */
+
+        $schema =
+            trim(
+                $INPUT->post->str(
+                    'plm_schema'
+                )
+            );
+
+        if ($schema === '') {
+            throw new \RuntimeException(
+                'No PLM schema specified.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * CREATE DATA
+         * ---------------------------------------------------------
+         *
+         * IMPORTANT:
+         *
+         * Only plm_create is read here.
+         *
+         * plm_filter is completely independent.
+         */
+
+        $posted =
+            $INPUT->post->arr(
+                'plm_create'
+            );
+
+        if (!is_array($posted)) {
+            $posted = [];
+        }
+
+        /*
+         * Struct.
+         */
+        $struct =
+            new PlmStruct();
+
+        /*
+         * Check schema permissions.
+         */
+        $schemaObject =
+            new \dokuwiki\plugin\struct\meta\Schema(
+                $schema
+            );
+
+        if (!$schemaObject->isEditable()) {
+            throw new \RuntimeException(
+                'You are not allowed to edit this Struct schema.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * NEW RECORD
+         * ---------------------------------------------------------
+         */
+
+        $access =
+            $struct->newGlobalAccess(
+                $schema
+            );
+
+        $data =
+            $struct->getDataArray(
+                $access
+            );
+
+        /*
+         * Copy submitted CREATE fields only.
+         */
+        foreach (
+            $posted as $field => $value
+        ) {
+
+            if (!is_string($field)) {
+                continue;
+            }
+
+            if (!preg_match(
+                '/^[a-zA-Z0-9_.-]+$/',
+                $field
+            )) {
+                continue;
+            }
+
+            if (
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
+            $data[$field] =
+                (string) $value;
+        }
+
+        /*
+         * Save.
+         */
+        $struct->save(
+            $access,
+            $data
+        );
+
+        /*
+         * Read final values back.
+         */
+        $data =
+            $struct->getDataArray(
+                $access
+            );
+
+        /*
+         * ---------------------------------------------------------
+         * REDIRECT
+         * ---------------------------------------------------------
+         */
+
+        $redirects =
+            $INPUT->post->arr(
+                'plm_redirects'
+            );
+
+        if (!is_array($redirects)) {
+            $redirects = [];
+        }
+
+        $target =
+            trim(
+                $redirects['create'] ?? ''
+            );
+
+        if ($target === '') {
+            $target =
+                $ID;
+        }
+
+        $target =
+            $this->expandRedirectTarget(
+                $target,
+                $data
+            );
+
+        $this->sendTargetRedirect(
+            $target,
+            $ID
+        );
+    }
+
+    /**
+     * Expand $field references in a redirect.
+     */
+    private function expandRedirectTarget(
+        string $target,
+        array $data
+    ): string {
+
+        return
+            preg_replace_callback(
+                '/\$([a-zA-Z_][a-zA-Z0-9_-]*)/',
+                function ($match) use ($data) {
+
+                    $field =
+                        $match[1];
+
+                    if (!array_key_exists(
+                        $field,
+                        $data
+                    )) {
+                        return '';
+                    }
+
+                    $value =
+                        $data[$field];
+
+                    if (is_array($value)) {
+
+                        return implode(
+                            ',',
+                            $value
+                        );
+                    }
+
+                    return (string) $value;
+                },
+                $target
+            );
+    }
+
+    /**
+     * -------------------------------------------------------------
+     * NORMAL PLM FORM
+     * -------------------------------------------------------------
      */
     private function processSubmit(): void
     {
@@ -269,6 +604,13 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
         /*
          * Filter.
+         *
+         * NOTE:
+         *
+         * Standalone PLM forms use plm_filter as
+         * a plain string here.
+         *
+         * Table filters use plm_filter[field].
          */
         $filter =
             trim(
@@ -282,8 +624,11 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
+         * ---------------------------------------------------------
          * REDIRECT
+         * ---------------------------------------------------------
          */
+
         if ($action === 'redirect') {
 
             $posted =
@@ -295,6 +640,14 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $INPUT->post->arr(
                     'plm_redirects'
                 );
+
+            if (!is_array($posted)) {
+                $posted = [];
+            }
+
+            if (!is_array($redirects)) {
+                $redirects = [];
+            }
 
             $this->redirectForm(
                 $posted,
@@ -323,8 +676,11 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
+         * ---------------------------------------------------------
          * CREATE
+         * ---------------------------------------------------------
          */
+
         if ($action === 'create') {
 
             if ($filter !== null) {
@@ -347,6 +703,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $INPUT->post->arr(
                     'plm_form'
                 );
+
+            if (!is_array($posted)) {
+                $posted = [];
+            }
 
             foreach (
                 $posted as $field => $value
@@ -380,8 +740,11 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
-         * UPDATE / DELETE require an existing record.
+         * ---------------------------------------------------------
+         * UPDATE / DELETE
+         * ---------------------------------------------------------
          */
+
         if ($filter === null) {
             throw new \RuntimeException(
                 ucfirst($action) .
@@ -409,8 +772,11 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
 
         /*
+         * ---------------------------------------------------------
          * DELETE
+         * ---------------------------------------------------------
          */
+
         if ($action === 'delete') {
 
             $data =
@@ -432,8 +798,11 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         }
 
         /*
+         * ---------------------------------------------------------
          * UPDATE
+         * ---------------------------------------------------------
          */
+
         $data =
             $struct->getDataArray(
                 $access
@@ -443,6 +812,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $INPUT->post->arr(
                 'plm_form'
             );
+
+        if (!is_array($posted)) {
+            $posted = [];
+        }
 
         foreach (
             $posted as $field => $value
@@ -547,6 +920,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         );
     }
 
+    /**
+     * Append form parameters to a redirect.
+     */
     private function appendFormParameters(
         string $target,
         array $posted
@@ -568,6 +944,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $existing = [];
 
         if ($query !== '') {
+
             parse_str(
                 $query,
                 $existing
@@ -617,6 +994,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
     }
 
+    /**
+     * Convert a submitted form value to a string.
+     */
     private function stringifyFormValue(
         $value
     ): string {
@@ -628,6 +1008,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             foreach ($value as $item) {
 
                 if (is_array($item)) {
+
                     $values[] =
                         implode(
                             ',',
@@ -636,7 +1017,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                                 $item
                             )
                         );
+
                 } else {
+
                     $values[] =
                         (string) $item;
                 }
@@ -670,6 +1053,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $INPUT->post->arr(
                 'plm_redirects'
             );
+
+        if (!is_array($redirects)) {
+            $redirects = [];
+        }
 
         $target =
             trim(

@@ -101,10 +101,6 @@ class PlmTable
 
         } catch (Throwable $e) {
 
-            /*
-             * Technical errors, such as a missing
-             * Struct schema, remain real PLM errors.
-             */
             $this->error(
                 'PLM table: ' .
                 $e->getMessage()
@@ -113,42 +109,20 @@ class PlmTable
             return;
         }
 
-        /*
-         * No matching records are not considered
-         * a technical error.
-         *
-         * Instead of rendering an empty table,
-         * display the configured error text.
-         */
-        if (empty($rows)) {
-
-            $this->notFound(
-                $errortext
-            );
-
-            return;
-        }
-
         $this->renderTable(
             $name,
+            $schema,
             $columns,
             $search,
             $rows,
-            $params
+            $params,
+            $errortext
         );
     }
 
     /**
      * Expand URI parameters in an explicit
      * PLM filter.
-     *
-     * Example:
-     *
-     *     name=&company
-     *
-     * becomes:
-     *
-     *     name=Anycubic
      */
     private function expandFilter(
         string $filter
@@ -190,14 +164,6 @@ class PlmTable
     /**
      * Build a Struct filter from the current
      * PLM state.
-     *
-     * Example:
-     *
-     *     name = Any
-     *
-     * becomes:
-     *
-     *     name~*Any*
      */
     private function buildStateFilter(
         string $name
@@ -270,8 +236,7 @@ class PlmTable
     }
 
     /**
-     * Combine the explicit PLM filter with
-     * the filters stored in PlmState.
+     * Combine explicit and state filters.
      */
     private function combineFilters(
         ?string $explicit,
@@ -297,12 +262,6 @@ class PlmTable
     /**
      * Determine all Struct fields required by
      * the table.
-     *
-     * Fields can originate from:
-     *
-     * - cols
-     * - filter
-     * - template
      */
     private function getStructFields(
         array $params
@@ -311,17 +270,13 @@ class PlmTable
         $fields = [];
 
         /*
-         * Fields displayed by the table.
+         * Visible columns.
          */
         foreach (
             $params['cols'] ?? []
             as $col
         ) {
 
-            /*
-             * Template columns do not directly
-             * represent Struct fields.
-             */
             if (
                 str_starts_with(
                     $col,
@@ -336,14 +291,26 @@ class PlmTable
         }
 
         /*
-         * Fields explicitly declared as
-         * filterable.
-         *
-         * These must also be loaded from Struct,
-         * even when they are not visible columns.
+         * Filter fields.
          */
         foreach (
-            $params['filter'] ?? []
+            $this->getConfiguredFields(
+                $params['filter'] ?? []
+            )
+            as $field
+        ) {
+
+            $fields[] =
+                $field;
+        }
+
+        /*
+         * Create fields.
+         */
+        foreach (
+            $this->getConfiguredFields(
+                $params['create'] ?? []
+            )
             as $field
         ) {
 
@@ -353,10 +320,6 @@ class PlmTable
 
         /*
          * Fields referenced by templates.
-         *
-         * Example:
-         *
-         *     template: details "Details: $name"
          */
         foreach (
             $params['template'] ?? []
@@ -425,17 +388,6 @@ class PlmTable
                 )
             );
 
-        /*
-         * Expand Struct fields.
-         *
-         * Example:
-         *
-         *     $name
-         *
-         * becomes:
-         *
-         *     Anycubic
-         */
         $text =
             preg_replace_callback(
                 '/\$([a-zA-Z0-9_.-]+)/',
@@ -460,9 +412,6 @@ class PlmTable
                 $text
             );
 
-        /*
-         * Expand URI parameters.
-         */
         $text =
             preg_replace_callback(
                 '/&([a-zA-Z0-9_-]+)/',
@@ -483,10 +432,12 @@ class PlmTable
      */
     private function renderTable(
         string $name,
+        string $schema,
         array $columns,
         $search,
         array $rows,
-        array $params
+        array $params,
+        string $errortext
     ): void {
 
         $fieldIndexes = [];
@@ -508,21 +459,84 @@ class PlmTable
         }
 
         /*
-         * Filter fields explicitly declared
-         * by the user.
+         * Explicit action fields.
          */
         $filterFields =
             $this->getFilterFields(
                 $params
             );
 
+        $createFields =
+            $this->getCreateFields(
+                $params
+            );
+
+        /*
+         * Action column exists if at least
+         * one action is configured.
+         */
+        $hasActions =
+            !empty($filterFields) ||
+            !empty($createFields);
+
+        /*
+         * Common form.
+         *
+         * ENTER is deliberately blocked at form level.
+         * Buttons remain normal submit buttons.
+         */
+        if ($hasActions) {
+
+            $this->renderer->doc .=
+                '<form method="post" '
+                . 'class="plm_table_form" '
+                . 'onkeydown="'
+                . 'if(event.key===\'Enter\' && '
+                . 'event.target.tagName!==\'BUTTON\'){'
+                . 'event.preventDefault();'
+                . 'event.stopPropagation();'
+                . 'return false;'
+                . '}'
+                . '">'
+
+                . '<input type="hidden" '
+                . 'name="plm_form_submit" '
+                . 'value="1">'
+
+                . '<input type="hidden" '
+                . 'name="plm_table" '
+                . 'value="'
+                . hsc($name)
+                . '">'
+
+                . '<input type="hidden" '
+                . 'name="plm_schema" '
+                . 'value="'
+                . hsc($schema)
+                . '">'
+
+                . '<input type="hidden" '
+                . 'name="sectok" '
+                . 'value="'
+                . hsc(
+                    getSecurityToken()
+                )
+                . '">';
+        }
+
         $this->renderer->table_open();
 
         /*
-         * Header.
+         * -----------------------------------------------------
+         * HEADER
+         * -----------------------------------------------------
          */
+
         $this->renderer->tablerow_open();
 
+        /*
+         * Normal columns first.
+         */
         foreach ($columns as $column) {
 
             $this->renderer->tableheader_open();
@@ -569,16 +583,42 @@ class PlmTable
             $this->renderer->tableheader_close();
         }
 
+        /*
+         * Action column LAST.
+         */
+        if ($hasActions) {
+
+            $this->renderer->tableheader_open();
+
+            $this->renderer->cdata(
+                'Action'
+            );
+
+            $this->renderer->tableheader_close();
+        }
+
         $this->renderer->tablerow_close();
 
         /*
-         * Optional filter row.
-         *
-         * A filter row is rendered only when
-         * at least one field was declared with
-         *
-         *     filter: name, description
+         * -----------------------------------------------------
+         * CREATE ROW
+         * -----------------------------------------------------
          */
+
+        if (!empty($createFields)) {
+
+            $this->renderCreateRow(
+                $columns,
+                $createFields
+            );
+        }
+
+        /*
+         * -----------------------------------------------------
+         * FILTER ROW
+         * -----------------------------------------------------
+         */
+
         if (!empty($filterFields)) {
 
             $this->renderFilterRow(
@@ -589,12 +629,18 @@ class PlmTable
         }
 
         /*
-         * Rows.
+         * -----------------------------------------------------
+         * DATA ROWS
+         * -----------------------------------------------------
          */
+
         foreach ($rows as $row) {
 
             $this->renderer->tablerow_open();
 
+            /*
+             * Normal data columns first.
+             */
             foreach ($columns as $column) {
 
                 $this->renderer->tablecell_open();
@@ -640,23 +686,77 @@ class PlmTable
                             $html;
                     }
 
-                } else {
+                } elseif (
+                    isset(
+                        $fieldIndexes[$column]
+                    )
+                ) {
 
-                    if (
-                        isset(
-                            $fieldIndexes[$column]
-                        )
-                    ) {
-
-                        $row[
-                            $fieldIndexes[$column]
-                        ]->render(
-                            $this->renderer,
-                            'xhtml'
-                        );
-                    }
+                    $row[
+                        $fieldIndexes[$column]
+                    ]->render(
+                        $this->renderer,
+                        'xhtml'
+                    );
                 }
 
+                $this->renderer->tablecell_close();
+            }
+
+            /*
+             * Empty Action cell LAST.
+             */
+            if ($hasActions) {
+
+                $this->renderer->tablecell_open();
+                $this->renderer->tablecell_close();
+            }
+
+            $this->renderer->tablerow_close();
+        }
+
+        /*
+         * -----------------------------------------------------
+         * EMPTY RESULT
+         * -----------------------------------------------------
+         */
+
+        if (empty($rows)) {
+
+            $this->renderer->tablerow_open();
+
+            /*
+             * First cell belongs to the first
+             * normal column.
+             */
+            $this->renderer->tablecell_open();
+
+            $this->renderer->doc .=
+                '<div class="plm_empty">' .
+                hsc($errortext) .
+                '</div>';
+
+            $this->renderer->tablecell_close();
+
+            /*
+             * Remaining normal columns.
+             */
+            for (
+                $i = 1;
+                $i < count($columns);
+                $i++
+            ) {
+
+                $this->renderer->tablecell_open();
+                $this->renderer->tablecell_close();
+            }
+
+            /*
+             * Action cell LAST.
+             */
+            if ($hasActions) {
+
+                $this->renderer->tablecell_open();
                 $this->renderer->tablecell_close();
             }
 
@@ -664,66 +764,184 @@ class PlmTable
         }
 
         $this->renderer->table_close();
+
+        if ($hasActions) {
+
+            $this->renderer->doc .=
+                '</form>';
+        }
     }
 
     /**
      * Get explicitly filterable fields.
-     *
-     * Example:
-     *
-     *     filter: name, description
-     *
-     * becomes:
-     *
-     *     [
-     *         'name',
-     *         'description'
-     *     ]
      */
     private function getFilterFields(
         array $params
     ): array {
 
-        $fields = [];
-
-        foreach (
+        return $this->getConfiguredFields(
             $params['filter'] ?? []
-            as $field
-        ) {
+        );
+    }
 
-            $field =
-                trim(
-                    $field
+    /**
+     * Get fields required for CREATE.
+     */
+    private function getCreateFields(
+        array $params
+    ): array {
+
+        return $this->getConfiguredFields(
+            $params['create'] ?? []
+        );
+    }
+
+    /**
+     * Normalize a configured field list.
+     *
+     * Supports both:
+     *
+     *     create: ipn description
+     *
+     * and:
+     *
+     *     create: ipn, description
+     */
+    private function getConfiguredFields(
+        array $fields
+    ): array {
+
+        $result = [];
+
+        foreach ($fields as $field) {
+
+            /*
+             * A parser token may still contain commas.
+             * Split them here.
+             */
+            $parts =
+                preg_split(
+                    '/\s*,\s*/',
+                    (string) $field
                 );
 
-            if ($field === '') {
-                continue;
-            }
+            foreach ($parts as $part) {
 
-            $fields[] =
-                $field;
+                $part =
+                    trim(
+                        $part
+                    );
+
+                if ($part === '') {
+                    continue;
+                }
+
+                if (!preg_match(
+                    '/^[a-zA-Z0-9_.-]+$/',
+                    $part
+                )) {
+                    continue;
+                }
+
+                $result[] =
+                    $part;
+            }
         }
 
         return array_values(
             array_unique(
-                $fields
+                $result
             )
         );
     }
 
     /**
-     * Render the filter row.
+     * Render the CREATE row.
      *
-     * Only fields declared with
+     * The Action cell is deliberately rendered
+     * as the LAST column.
+     */
+    private function renderCreateRow(
+        array $columns,
+        array $createFields
+    ): void {
+
+        $this->renderer->tablerow_open();
+
+        /*
+         * Create inputs first.
+         */
+        foreach ($columns as $column) {
+
+            $this->renderer->tablecell_open();
+
+            /*
+             * Template columns do not receive
+             * create inputs.
+             */
+            if (
+                str_starts_with(
+                    $column,
+                    '@'
+                )
+            ) {
+
+                $this->renderer->tablecell_close();
+                continue;
+            }
+
+            /*
+             * Only explicitly configured create
+             * fields receive an input.
+             */
+            if (!in_array(
+                $column,
+                $createFields,
+                true
+            )) {
+
+                $this->renderer->tablecell_close();
+                continue;
+            }
+
+            $this->renderer->doc .=
+                '<input type="text" '
+                . 'name="plm_create['
+                . hsc($column)
+                . ']" '
+                . 'value="" '
+                . 'placeholder="'
+                . hsc(
+                    'Create ' . $column
+                )
+                . '">';
+
+            $this->renderer->tablecell_close();
+        }
+
+        /*
+         * Create button LAST.
+         */
+        $this->renderer->tablecell_open();
+
+        $this->renderer->doc .=
+            '<button type="submit" '
+            . 'name="plm_action" '
+            . 'value="create" '
+            . 'class="plm_table_create_button">'
+            . hsc('Create')
+            . '</button>';
+
+        $this->renderer->tablecell_close();
+
+        $this->renderer->tablerow_close();
+    }
+
+    /**
+     * Render the FILTER row.
      *
-     *     filter: ...
-     *
-     * receive an input field.
-     *
-     * The filter is submitted using POST.
-     * The POST request is converted by
-     * syntax_plugin_plm into a clean
-     * ?plm=<encoded-state> URL.
+     * The Action cell is deliberately rendered
+     * as the LAST column.
      */
     private function renderFilterRow(
         string $name,
@@ -733,14 +951,13 @@ class PlmTable
 
         $this->renderer->tablerow_open();
 
+        /*
+         * Filter fields first.
+         */
         foreach ($columns as $column) {
 
             $this->renderer->tablecell_open();
 
-            /*
-             * Template columns are not directly
-             * searchable.
-             */
             if (
                 str_starts_with(
                     $column,
@@ -754,7 +971,6 @@ class PlmTable
             ) {
 
                 $this->renderer->tablecell_close();
-
                 continue;
             }
 
@@ -764,11 +980,11 @@ class PlmTable
                     $column
                 );
 
-            $html =
-                '<form method="post" '
-                . 'class="plm_table_filter_form">'
-                . '<input type="text" '
-                . 'name="plm_filter_value" '
+            $this->renderer->doc .=
+                '<input type="text" '
+                . 'name="plm_filter['
+                . hsc($column)
+                . ']" '
                 . 'value="'
                 . hsc($value)
                 . '" '
@@ -776,24 +992,25 @@ class PlmTable
                 . hsc(
                     'Filter ' . $column
                 )
-                . '">'
-                . '<input type="hidden" '
-                . 'name="plm_filter_table" '
-                . 'value="'
-                . hsc($name)
-                . '">'
-                . '<input type="hidden" '
-                . 'name="plm_filter_field" '
-                . 'value="'
-                . hsc($column)
-                . '">'
-                . '</form>';
-
-            $this->renderer->doc .=
-                $html;
+                . '">';
 
             $this->renderer->tablecell_close();
         }
+
+        /*
+         * Filter button LAST.
+         */
+        $this->renderer->tablecell_open();
+
+        $this->renderer->doc .=
+            '<button type="submit" '
+            . 'name="plm_action" '
+            . 'value="filter" '
+            . 'class="plm_table_filter_button">'
+            . hsc('Filter')
+            . '</button>';
+
+        $this->renderer->tablecell_close();
 
         $this->renderer->tablerow_close();
     }
@@ -806,28 +1023,8 @@ class PlmTable
     ): void {
 
         $this->renderer->doc .=
-            '<div class="error">'
-            .
-            hsc($message)
-            .
-            '</div>';
-    }
-
-    /**
-     * Display the configured "not found" text.
-     *
-     * This is intentionally not rendered as
-     * a DokuWiki error box.
-     */
-    private function notFound(
-        string $message
-    ): void {
-
-        $this->renderer->doc .=
-            '<div class="plm_empty">'
-            .
-            hsc($message)
-            .
+            '<div class="error">' .
+            hsc($message) .
             '</div>';
     }
 }

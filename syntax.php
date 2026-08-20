@@ -86,12 +86,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             return false;
         }
 
-        /*
-         * Process a submitted table filter
-         * before rendering the page.
-         */
-        $this->processStateRequest();
-
         static $blocks = [];
         static $states = [];
 
@@ -116,8 +110,11 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         }
 
         /*
+         * ---------------------------------------------------------
          * ENTER
+         * ---------------------------------------------------------
          */
+
         if (isset($data['enter'])) {
 
             $blocks[$rendererId] = [
@@ -129,8 +126,11 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         }
 
         /*
+         * ---------------------------------------------------------
          * EXIT
+         * ---------------------------------------------------------
          */
+
         if (isset($data['exit'])) {
 
             $block =
@@ -152,8 +152,11 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         }
 
         /*
+         * ---------------------------------------------------------
          * CONTENT
+         * ---------------------------------------------------------
          */
+
         if (isset($data['content'])) {
 
             if (
@@ -179,7 +182,9 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                 if ($pos === false) {
 
                     $blocks[$rendererId]['header'] =
-                        trim($content);
+                        trim(
+                            $content
+                        );
 
                 } else {
 
@@ -212,142 +217,8 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
     }
 
     /**
-     * Process a submitted table filter.
-     *
-     * The filter form uses POST.
-     *
-     * POST:
-     *
-     *     plm_filter_table
-     *     plm_filter_field
-     *     plm_filter_value
-     *
-     * becomes:
-     *
-     *     ?plm=<encoded-state>
+     * Render a complete PLM block.
      */
-    private function processStateRequest(): void
-    {
-        global $INPUT;
-        global $ID;
-
-        /*
-         * Only process POST requests.
-         */
-        if (
-            strtoupper(
-                $INPUT->server->str('REQUEST_METHOD')
-            ) !== 'POST'
-        ) {
-            return;
-        }
-
-        $table =
-            $INPUT->post->str(
-                'plm_filter_table'
-            );
-
-        $field =
-            $INPUT->post->str(
-                'plm_filter_field'
-            );
-
-        /*
-         * No PLM filter submission.
-         */
-        if (
-            $table === null ||
-            $table === '' ||
-            $field === null ||
-            $field === ''
-        ) {
-            return;
-        }
-
-        $value =
-            $INPUT->post->str(
-                'plm_filter_value'
-            ) ?? '';
-
-        /*
-         * Validate table name.
-         */
-        if (!preg_match(
-            '/^[a-zA-Z0-9_-]+$/',
-            $table
-        )) {
-            return;
-        }
-
-        /*
-         * Validate field name.
-         */
-        if (!preg_match(
-            '/^[a-zA-Z0-9_.-]+$/',
-            $field
-        )) {
-            return;
-        }
-
-        /*
-         * Load existing state.
-         */
-        $state =
-            new PlmState();
-
-        /*
-         * Update filter value.
-         */
-        $state->setFilterValue(
-            $table,
-            $field,
-            $value
-        );
-
-        /*
-         * Encode state.
-         */
-        $encoded =
-            $state->encode();
-
-        /*
-         * Build clean URL for current page.
-         */
-        $url =
-            wl(
-                $ID,
-                [],
-                true
-            );
-
-        /*
-         * Add only the PLM state.
-         */
-        if ($encoded !== '') {
-
-            $separator =
-                str_contains(
-                    $url,
-                    '?'
-                )
-                    ? '&'
-                    : '?';
-
-            $url .=
-                $separator .
-                'plm=' .
-                rawurlencode(
-                    $encoded
-                );
-        }
-
-        send_redirect(
-            $url
-        );
-
-        exit;
-    }
-
     private function renderBlock(
         Doku_Renderer $renderer,
         string $header,
@@ -390,6 +261,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
             switch ($type) {
 
+                /*
+                 * -------------------------------------------------
+                 * TABLE
+                 * -------------------------------------------------
+                 */
+
                 case 'table':
 
                     $struct =
@@ -415,6 +292,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                     );
 
                     return true;
+
+                /*
+                 * -------------------------------------------------
+                 * FORM
+                 * -------------------------------------------------
+                 */
 
                 case 'form':
 
@@ -442,6 +325,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                     return true;
 
+                /*
+                 * -------------------------------------------------
+                 * SELECT
+                 * -------------------------------------------------
+                 */
+
                 case 'select':
 
                     $struct =
@@ -463,6 +352,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                     );
 
                     return true;
+
+                /*
+                 * -------------------------------------------------
+                 * UNKNOWN
+                 * -------------------------------------------------
+                 */
 
                 default:
 
@@ -522,20 +417,22 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
     ): ?array {
 
         $header =
-            trim($header);
+            trim(
+                $header
+            );
 
         /*
          * Basic structure:
          *
-         * type > name | schema
+         *     type > name | schema
          *
          * followed optionally by:
          *
-         * [filter]
+         *     [filter]
          *
          * and/or:
          *
-         * "errortext"
+         *     "errortext"
          */
         if (!preg_match(
             '/^'
@@ -565,8 +462,8 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         /*
          * Error text.
          *
-         * Decode escaped characters inside the
-         * quoted string.
+         * Decode escaped characters inside
+         * the quoted string.
          */
         if (
             isset($match[5])
@@ -607,6 +504,9 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         ];
     }
 
+    /**
+     * Display a technical PLM error.
+     */
     private function error(
         Doku_Renderer $renderer,
         string $message
