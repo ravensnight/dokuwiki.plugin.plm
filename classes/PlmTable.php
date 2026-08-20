@@ -38,6 +38,7 @@ class PlmTable
             $this->error(
                 'PLM table: parameter "schema" is required'
             );
+
             return;
         }
 
@@ -50,6 +51,7 @@ class PlmTable
             $this->error(
                 'PLM table: parameter "cols" is required'
             );
+
             return;
         }
 
@@ -79,11 +81,68 @@ class PlmTable
                     $stateFilter
                 );
 
+            /*
+             * Extract special Lookup RID filters.
+             *
+             * Example:
+             *
+             *     part._pk=123
+             *
+             * The expression is NOT sent to Struct.
+             */
+            $lookupFilters =
+                $this->extractLookupFilters(
+                    $filter
+                );
+
+            $structFilter =
+                $lookupFilters['filter'];
+
+            /*
+             * The lookup field itself must be included
+             * in the result so we can inspect its stored
+             * [page-id,rid] value.
+             */
+            foreach (
+                $lookupFilters['fields']
+                as $lookupField
+            ) {
+
+                if (!in_array(
+                    $lookupField,
+                    $fields,
+                    true
+                )) {
+
+                    $fields[] =
+                        $lookupField;
+                }
+            }
+
+            /*
+             * Remove accidental *. _pk fields.
+             *
+             * A Lookup RID is a PLM-level pseudo field and
+             * must never be passed to Struct.
+             *
+             * Example:
+             *
+             *     part._pk
+             *
+             * becomes:
+             *
+             *     part
+             */
+            $fields =
+                $this->normalizeStructFields(
+                    $fields
+                );
+
             $result =
                 $this->struct->search(
                     $schema,
                     $fields,
-                    $filter
+                    $structFilter
                 );
 
             $search =
@@ -91,6 +150,25 @@ class PlmTable
 
             $rows =
                 $result['rows'];
+
+            /*
+             * Apply Lookup RID filters in PHP.
+             *
+             * This is deliberately done after Struct
+             * has returned the matching records.
+             */
+            if (!empty($lookupFilters['conditions'])) {
+
+                [
+                    $search,
+                    $rows
+                ] =
+                    $this->filterRowsByLookupRid(
+                        $search,
+                        $rows,
+                        $lookupFilters['conditions']
+                    );
+            }
 
         } catch (Throwable $e) {
 
@@ -114,8 +192,78 @@ class PlmTable
     }
 
     /**
-     * Expand URI parameters in an explicit
-     * PLM filter.
+     * Normalize PLM pseudo fields before passing them
+     * to Struct.
+     *
+     * Exact "_pk" is handled by PlmStruct itself.
+     *
+     * Lookup pseudo fields:
+     *
+     *     part._pk
+     *
+     * are converted to:
+     *
+     *     part
+     */
+    private function normalizeStructFields(
+        array $fields
+    ): array {
+
+        $result = [];
+
+        foreach ($fields as $field) {
+
+            $field =
+                trim(
+                    (string) $field
+                );
+
+            if ($field === '') {
+                continue;
+            }
+
+            if (
+                $field !==
+                PlmStruct::PRIMARY_KEY_FIELD &&
+                str_ends_with(
+                    $field,
+                    '._pk'
+                )
+            ) {
+
+                $field =
+                    substr(
+                        $field,
+                        0,
+                        -4
+                    );
+            }
+
+            if ($field === '') {
+                continue;
+            }
+
+            $result[] =
+                $field;
+        }
+
+        return array_values(
+            array_unique(
+                $result
+            )
+        );
+    }
+
+    /**
+     * Expand PLM filter placeholders.
+     *
+     * Supports:
+     *
+     *     &_pk
+     *
+     * and:
+     *
+     *     $partselect._pk
      */
     private function expandFilter(
         string $filter
@@ -127,6 +275,9 @@ class PlmTable
 
         $hasEmptyParameter = false;
 
+        /*
+         * URI parameters.
+         */
         $filter =
             preg_replace_callback(
                 '/&([a-zA-Z0-9_-]+)/',
@@ -147,16 +298,515 @@ class PlmTable
                 $filter
             );
 
+        /*
+         * PLM select references.
+         *
+         *     $partselect._pk
+         */
+        $filter =
+            preg_replace_callback(
+                '/\$([a-zA-Z0-9_-]+)\._pk\b/',
+                function ($match)
+                    use (&$hasEmptyParameter) {
+
+                    $selectName =
+                        $match[1];
+
+                    $value =
+                        PlmSelect::getSelectionValue(
+                            $selectName,
+                            PlmStruct::PRIMARY_KEY_FIELD
+                        );
+
+                    if (
+                        $value === null ||
+                        $value === ''
+                    ) {
+
+                        $hasEmptyParameter = true;
+
+                        return '';
+                    }
+
+                    if (
+                        !ctype_digit(
+                            (string) $value
+                        ) ||
+                        (int) $value <= 0
+                    ) {
+
+                        throw new \RuntimeException(
+                            'PLM select "' .
+                            $selectName .
+                            '" returned an invalid _pk.'
+                        );
+                    }
+
+                    return (string) $value;
+                },
+                $filter
+            );
+
         if ($hasEmptyParameter) {
             return null;
         }
 
-        return $filter;
+        return trim($filter);
     }
 
     /**
-     * Build a Struct filter from the current
-     * PLM state.
+     * Extract Lookup RID filters from a PLM filter.
+     *
+     * Recognized syntax:
+     *
+     *     part._pk=123
+     *     part._pk = 123
+     *
+     * Returns:
+     *
+     *     [
+     *         'filter' => normal Struct filter or null,
+     *         'conditions' => [
+     *             [
+     *                 'field' => 'part',
+     *                 'rid' => 123,
+     *                 'operator' => '='
+     *             ]
+     *         ],
+     *         'fields' => ['part']
+     *     ]
+     */
+    private function extractLookupFilters(
+        ?string $filter
+    ): array {
+
+        if (
+            $filter === null ||
+            trim($filter) === ''
+        ) {
+
+            return [
+                'filter' =>
+                    $filter,
+
+                'conditions' =>
+                    [],
+
+                'fields' =>
+                    [],
+            ];
+        }
+
+        $conditions = [];
+        $fields = [];
+
+        /*
+         * Only simple equality/inequality is supported
+         * for Lookup._pk.
+         */
+        $pattern =
+            '/\b(' .
+            '[a-zA-Z0-9_.-]+' .
+            ')\s*' .
+            '(!=|=)' .
+            '\s*' .
+            '([0-9]+)' .
+            '\b/';
+
+        $normalFilter =
+            preg_replace_callback(
+                $pattern,
+                function ($match) use (
+                    &$conditions,
+                    &$fields
+                ) {
+
+                    $field =
+                        $match[1];
+
+                    $operator =
+                        $match[2];
+
+                    $rid =
+                        (int) $match[3];
+
+                    /*
+                     * Only field._pk is special.
+                     */
+                    if (
+                        !str_ends_with(
+                            $field,
+                            '._pk'
+                        )
+                    ) {
+                        return $match[0];
+                    }
+
+                    $lookupField =
+                        substr(
+                            $field,
+                            0,
+                            -4
+                        );
+
+                    if ($lookupField === '') {
+                        throw new \RuntimeException(
+                            'Invalid PLM Lookup _pk filter.'
+                        );
+                    }
+
+                    if ($rid <= 0) {
+                        throw new \RuntimeException(
+                            'PLM Lookup _pk must be greater than zero.'
+                        );
+                    }
+
+                    $conditions[] = [
+                        'field' =>
+                            $lookupField,
+
+                        'rid' =>
+                            $rid,
+
+                        'operator' =>
+                            $operator,
+                    ];
+
+                    $fields[] =
+                        $lookupField;
+
+                    return '';
+                },
+                $filter
+            );
+
+        /*
+         * Clean up logical operators left behind after
+         * removing special conditions.
+         */
+        $normalFilter =
+            $this->cleanLogicalFilter(
+                $normalFilter
+            );
+
+        return [
+            'filter' =>
+                $normalFilter,
+
+            'conditions' =>
+                $conditions,
+
+            'fields' =>
+                array_values(
+                    array_unique(
+                        $fields
+                    )
+                ),
+        ];
+    }
+
+    /**
+     * Remove logical debris left after special filter
+     * conditions have been extracted.
+     */
+    private function cleanLogicalFilter(
+        ?string $filter
+    ): ?string {
+
+        if ($filter === null) {
+            return null;
+        }
+
+        $filter =
+            trim(
+                $filter
+            );
+
+        /*
+         * Repeatedly remove empty parenthesized parts.
+         */
+        do {
+
+            $oldFilter =
+                $filter;
+
+            $filter =
+                preg_replace(
+                    '/\(\s*\)/',
+                    '',
+                    $filter
+                );
+
+            $filter =
+                preg_replace(
+                    '/^\s*(AND|OR)\s+/i',
+                    '',
+                    $filter
+                );
+
+            $filter =
+                preg_replace(
+                    '/\s+(AND|OR)\s*$/i',
+                    '',
+                    $filter
+                );
+
+            $filter =
+                preg_replace(
+                    '/\(\s*(AND|OR)\s+/i',
+                    '(',
+                    $filter
+                );
+
+            $filter =
+                preg_replace(
+                    '/\s+(AND|OR)\s*\)/i',
+                    ')',
+                    $filter
+                );
+
+            $filter =
+                trim(
+                    $filter
+                );
+
+        } while (
+            $oldFilter !== $filter
+        );
+
+        if ($filter === '') {
+            return null;
+        }
+
+        /*
+         * If only one wrapping pair remains, remove it.
+         */
+        while (
+            strlen($filter) >= 2 &&
+            $filter[0] === '(' &&
+            $filter[strlen($filter) - 1] === ')'
+        ) {
+
+            if (
+                !$this->hasMatchingOuterParentheses(
+                    $filter
+                )
+            ) {
+                break;
+            }
+
+            $filter =
+                trim(
+                    substr(
+                        $filter,
+                        1,
+                        -1
+                    )
+                );
+        }
+
+        return $filter === ''
+            ? null
+            : $filter;
+    }
+
+    /**
+     * Filter Struct rows according to Lookup RIDs.
+     *
+     * The Struct Lookup value internally contains:
+     *
+     *     [page-id, rid]
+     *
+     * We compare the rid, not the display value.
+     *
+     * Important:
+     *
+     * The Lookup type is determined from the Struct
+     * Column, not from the Value object.
+     */
+    private function filterRowsByLookupRid(
+        $search,
+        array $rows,
+        array $conditions
+    ): array {
+
+        if (empty($conditions)) {
+            return [
+                $search,
+                $rows
+            ];
+        }
+
+        /*
+         * Build the column index and retain the actual
+         * Struct Column objects.
+         */
+        $columns = [];
+
+        foreach (
+            $search->getColumns()
+            as $index => $column
+        ) {
+
+            $columns[
+                $column->getLabel()
+            ] = [
+                'index' =>
+                    $index,
+
+                'column' =>
+                    $column,
+            ];
+        }
+
+        $filteredRows = [];
+        $filteredRids = [];
+        $filteredPids = [];
+
+        $rids =
+            $search->getRids();
+
+        $pids =
+            $search->getPids();
+
+        foreach (
+            $rows as $rowIndex => $row
+        ) {
+
+            $matches = true;
+
+            foreach (
+                $conditions as $condition
+            ) {
+
+                $field =
+                    $condition['field'];
+
+                if (
+                    !isset(
+                        $columns[$field]
+                    )
+                ) {
+
+                    throw new \RuntimeException(
+                        'Lookup field "' .
+                        $field .
+                        '" was not returned by Struct.'
+                    );
+                }
+
+                $column =
+                    $columns[$field]['column'];
+
+                $columnIndex =
+                    $columns[$field]['index'];
+
+                /*
+                 * Determine Lookup from the Struct
+                 * Column itself.
+                 */
+                if (
+                    !$this->struct->isLookupColumn(
+                        $column
+                    )
+                ) {
+
+                    throw new \RuntimeException(
+                        'Field "' .
+                        $field .
+                        '" is not a Struct Lookup field.'
+                    );
+                }
+
+                if (
+                    !array_key_exists(
+                        $columnIndex,
+                        $row
+                    )
+                ) {
+
+                    $matches = false;
+                    break;
+                }
+
+                $value =
+                    $row[$columnIndex];
+
+                /*
+                 * Extract the actual referenced RID(s).
+                 *
+                 * PlmStruct handles the Struct Lookup JSON,
+                 * including the case where getValue() returns
+                 * a JSON encoded array containing JSON strings.
+                 */
+                $lookupRids =
+                    $this->struct->getLookupPrimaryKeys(
+                        $value
+                    );
+
+                $wantedRid =
+                    (int) $condition['rid'];
+
+                $contains =
+                    in_array(
+                        $wantedRid,
+                        $lookupRids,
+                        true
+                    );
+
+                if (
+                    $condition['operator'] === '=' &&
+                    !$contains
+                ) {
+
+                    $matches = false;
+                    break;
+                }
+
+                if (
+                    $condition['operator'] === '!=' &&
+                    $contains
+                ) {
+
+                    $matches = false;
+                    break;
+                }
+            }
+
+            if (!$matches) {
+                continue;
+            }
+
+            $filteredRows[] =
+                $row;
+
+            $filteredRids[] =
+                $rids[$rowIndex] ?? 0;
+
+            $filteredPids[] =
+                $pids[$rowIndex] ?? '';
+        }
+
+        /*
+         * SearchConfig itself cannot be reconstructed from
+         * an already filtered result. We therefore wrap the
+         * result object only for the methods PlmTable needs.
+         */
+        $filteredSearch =
+            new PlmTableFilteredSearch(
+                $search,
+                $filteredPids,
+                $filteredRids
+            );
+
+        return [
+            $filteredSearch,
+            $filteredRows,
+        ];
+    }
+
+    /**
+     * Build a Struct filter from current PLM state.
      */
     private function buildStateFilter(
         string $name
@@ -173,7 +823,9 @@ class PlmTable
 
         $parts = [];
 
-        foreach ($values as $field => $value) {
+        foreach (
+            $values as $field => $value
+        ) {
 
             if ($value === '') {
                 continue;
@@ -202,8 +854,8 @@ class PlmTable
     }
 
     /**
-     * Escape characters which have a special
-     * meaning in Struct filter values.
+     * Escape characters with a special meaning
+     * in Struct filter values.
      */
     private function escapeFilterValue(
         string $value
@@ -253,8 +905,7 @@ class PlmTable
     }
 
     /**
-     * Determine all Struct fields required by
-     * the table.
+     * Determine all Struct fields required by the table.
      */
     private function getStructFields(
         array $params
@@ -276,10 +927,6 @@ class PlmTable
                 continue;
             }
 
-            /*
-             * "_pk" is a PLM technical field and
-             * does not exist in the Struct schema.
-             */
             if (
                 $col ===
                 PlmStruct::PRIMARY_KEY_FIELD
@@ -302,6 +949,7 @@ class PlmTable
                 $field !==
                 PlmStruct::PRIMARY_KEY_FIELD
             ) {
+
                 $fields[] =
                     $field;
             }
@@ -318,18 +966,12 @@ class PlmTable
                 $field !==
                 PlmStruct::PRIMARY_KEY_FIELD
             ) {
+
                 $fields[] =
                     $field;
             }
         }
 
-        /*
-         * Delete field must always be available
-         * in every data row.
-         *
-         * "_pk" is technical and therefore does
-         * not need to be added to Struct columns.
-         */
         if (
             isset($params['delete']) &&
             is_string($params['delete'])
@@ -345,9 +987,6 @@ class PlmTable
             }
         }
 
-        /*
-         * Fields referenced by templates.
-         */
         foreach (
             $params['template'] ?? []
             as $token
@@ -364,10 +1003,6 @@ class PlmTable
                 as $field
             ) {
 
-                /*
-                 * "_pk" is resolved from the
-                 * SearchConfig RID.
-                 */
                 if (
                     $field ===
                     PlmStruct::PRIMARY_KEY_FIELD
@@ -380,9 +1015,11 @@ class PlmTable
             }
         }
 
-        return array_values(
-            array_unique(
-                $fields
+        return $this->normalizeStructFields(
+            array_values(
+                array_unique(
+                    $fields
+                )
             )
         );
     }
@@ -402,18 +1039,6 @@ class PlmTable
 
     /**
      * Get the configured template definition.
-     *
-     * Syntax:
-     *
-     *     template: link_edit "Mein Link" [[ page | Open ]]
-     *
-     * Returns:
-     *
-     *     [
-     *         'name' => 'link_edit',
-     *         'label' => 'Mein Link',
-     *         'text' => '[[ page | Open ]]'
-     *     ]
      */
     private function getTemplateDefinition(
         array $template,
@@ -448,8 +1073,6 @@ class PlmTable
 
     /**
      * Expand a named PLM template.
-     *
-     * "_pk" is resolved from the Struct RID.
      */
     private function expandTemplate(
         array $template,
@@ -472,10 +1095,6 @@ class PlmTable
         $text =
             $definition['text'];
 
-        /*
-         * Expand Struct fields and the
-         * technical "_pk" field.
-         */
         $text =
             preg_replace_callback(
                 '/\$([a-zA-Z0-9_.-]+)/',
@@ -489,9 +1108,6 @@ class PlmTable
                     $field =
                         $match[1];
 
-                    /*
-                     * Technical PLM primary key.
-                     */
                     if (
                         $field ===
                         PlmStruct::PRIMARY_KEY_FIELD
@@ -502,6 +1118,48 @@ class PlmTable
                         }
 
                         return (string) $rid;
+                    }
+
+                    /*
+                     * Lookup._pk inside templates.
+                     */
+                    if (
+                        str_ends_with(
+                            $field,
+                            '._pk'
+                        )
+                    ) {
+
+                        $lookupField =
+                            substr(
+                                $field,
+                                0,
+                                -4
+                            );
+
+                        if (
+                            !isset(
+                                $fieldIndexes[$lookupField]
+                            )
+                        ) {
+                            return $match[0];
+                        }
+
+                        $lookupRids =
+                            $this->struct->getLookupPrimaryKeys(
+                                $row[
+                                    $fieldIndexes[$lookupField]
+                                ]
+                            );
+
+                        if (empty($lookupRids)) {
+                            return '';
+                        }
+
+                        return implode(
+                            ',',
+                            $lookupRids
+                        );
                     }
 
                     if (
@@ -519,9 +1177,6 @@ class PlmTable
                 $text
             );
 
-        /*
-         * Expand URI parameters.
-         */
         $text =
             preg_replace_callback(
                 '/&([a-zA-Z0-9_-]+)/',
@@ -588,55 +1243,42 @@ class PlmTable
             !empty($createFields) ||
             $deleteField !== null;
 
-        /*
-         * Common form.
-         */
         if ($hasActions) {
 
             $this->renderer->doc .=
-                '<form method="post" '
-                . 'class="plm_table_form" '
-                . 'onkeydown="'
-                . 'if(event.key===\'Enter\' && '
-                . 'event.target.tagName!==\'BUTTON\'){'
-                . 'event.preventDefault();'
-                . 'event.stopPropagation();'
-                . 'return false;'
-                . '}'
-                . '">' .
-
-                '<input type="hidden" '
-                . 'name="plm_form_submit" '
-                . 'value="1">' .
-
-                '<input type="hidden" '
-                . 'name="plm_table" '
-                . 'value="'
-                . hsc($name)
-                . '">' .
-
-                '<input type="hidden" '
-                . 'name="plm_schema" '
-                . 'value="'
-                . hsc($schema)
-                . '">' .
-
-                '<input type="hidden" '
-                . 'name="sectok" '
-                . 'value="'
-                . hsc(
+                '<form method="post" ' .
+                'class="plm_table_form" ' .
+                'onkeydown="' .
+                'if(event.key===\'Enter\' && ' .
+                'event.target.tagName!==\'BUTTON\'){' .
+                'event.preventDefault();' .
+                'event.stopPropagation();' .
+                'return false;' .
+                '}' .
+                '">' .
+                '<input type="hidden" ' .
+                'name="plm_form_submit" ' .
+                'value="1">' .
+                '<input type="hidden" ' .
+                'name="plm_table" ' .
+                'value="' .
+                hsc($name) .
+                '">' .
+                '<input type="hidden" ' .
+                'name="plm_schema" ' .
+                'value="' .
+                hsc($schema) .
+                '">' .
+                '<input type="hidden" ' .
+                'name="sectok" ' .
+                'value="' .
+                hsc(
                     getSecurityToken()
-                )
-                . '">';
+                ) .
+                '">';
         }
 
         $this->renderer->table_open();
-
-        /*
-         * -----------------------------------------------------
-         * HEADER
-         * -----------------------------------------------------
-         */
 
         $this->renderer->tablerow_open();
 
@@ -657,10 +1299,6 @@ class PlmTable
                         1
                     );
 
-                /*
-                 * For template columns the second
-                 * template token is the column label.
-                 */
                 $definition =
                     $this->getTemplateDefinition(
                         $params['template'] ?? [],
@@ -692,9 +1330,6 @@ class PlmTable
             $this->renderer->tableheader_close();
         }
 
-        /*
-         * ACTION HEADER IS LAST.
-         */
         if ($hasActions) {
 
             $this->renderer->tableheader_open();
@@ -708,12 +1343,6 @@ class PlmTable
 
         $this->renderer->tablerow_close();
 
-        /*
-         * -----------------------------------------------------
-         * CREATE ROW
-         * -----------------------------------------------------
-         */
-
         if (!empty($createFields)) {
 
             $this->renderCreateRow(
@@ -721,12 +1350,6 @@ class PlmTable
                 $createFields
             );
         }
-
-        /*
-         * -----------------------------------------------------
-         * FILTER ROW
-         * -----------------------------------------------------
-         */
 
         if (!empty($filterFields)) {
 
@@ -736,12 +1359,6 @@ class PlmTable
                 $filterFields
             );
         }
-
-        /*
-         * -----------------------------------------------------
-         * DATA ROWS
-         * -----------------------------------------------------
-         */
 
         $rids =
             $search->getRids();
@@ -806,9 +1423,6 @@ class PlmTable
                     PlmStruct::PRIMARY_KEY_FIELD
                 ) {
 
-                    /*
-                     * Technical Struct RID.
-                     */
                     $this->renderer->cdata(
                         (string) $rid
                     );
@@ -830,16 +1444,10 @@ class PlmTable
                 $this->renderer->tablecell_close();
             }
 
-            /*
-             * ACTION CELL IS LAST.
-             */
             if ($hasActions) {
 
                 $this->renderer->tablecell_open();
 
-                /*
-                 * Delete button.
-                 */
                 if ($deleteField !== null) {
 
                     $deleteValue =
@@ -868,20 +1476,19 @@ class PlmTable
                     if ($deleteValue !== '') {
 
                         $this->renderer->doc .=
-                            '<button type="submit" '
-                            . 'name="plm_action" '
-                            . 'value="delete" '
-                            . 'class="plm_table_delete_button">'
-                            . hsc('Delete')
-                            . '</button>'
-
-                            . '<input type="hidden" '
-                            . 'name="plm_delete['
-                            . hsc($deleteField)
-                            . ']" '
-                            . 'value="'
-                            . hsc($deleteValue)
-                            . '">';
+                            '<button type="submit" ' .
+                            'name="plm_action" ' .
+                            'value="delete" ' .
+                            'class="plm_table_delete_button">' .
+                            hsc('Delete') .
+                            '</button>' .
+                            '<input type="hidden" ' .
+                            'name="plm_delete[' .
+                            hsc($deleteField) .
+                            ']" ' .
+                            'value="' .
+                            hsc($deleteValue) .
+                            '">';
                     }
                 }
 
@@ -890,12 +1497,6 @@ class PlmTable
 
             $this->renderer->tablerow_close();
         }
-
-        /*
-         * -----------------------------------------------------
-         * EMPTY RESULT
-         * -----------------------------------------------------
-         */
 
         if (empty($rows)) {
 
@@ -932,14 +1533,12 @@ class PlmTable
         $this->renderer->table_close();
 
         if ($hasActions) {
+
             $this->renderer->doc .=
                 '</form>';
         }
     }
 
-    /**
-     * Get explicitly filterable fields.
-     */
     private function getFilterFields(
         array $params
     ): array {
@@ -949,9 +1548,6 @@ class PlmTable
         );
     }
 
-    /**
-     * Get fields required for CREATE.
-     */
     private function getCreateFields(
         array $params
     ): array {
@@ -961,9 +1557,6 @@ class PlmTable
         );
     }
 
-    /**
-     * Get the configured DELETE field.
-     */
     private function getDeleteField(
         array $params
     ): ?string {
@@ -998,9 +1591,6 @@ class PlmTable
         return $field;
     }
 
-    /**
-     * Normalize a configured field list.
-     */
     private function getConfiguredFields(
         array $fields
     ): array {
@@ -1049,9 +1639,6 @@ class PlmTable
         );
     }
 
-    /**
-     * Render the CREATE row.
-     */
     private function renderCreateRow(
         array $columns,
         array $createFields
@@ -1082,48 +1669,42 @@ class PlmTable
             }
 
             $this->renderer->doc .=
-                '<input type="text" '
-                . 'name="plm_create['
-                . hsc($column)
-                . ']" '
-                . 'value="" '
-                . 'placeholder="'
-                . hsc(
+                '<input type="text" ' .
+                'name="plm_create[' .
+                hsc($column) .
+                ']" ' .
+                'value="" ' .
+                'placeholder="' .
+                hsc(
                     'Create ' . $column
-                )
-                . '" '
-                . 'onkeydown="'
-                . 'if(event.key===\'Enter\'){'
-                . 'event.preventDefault();'
-                . 'event.stopPropagation();'
-                . 'return false;'
-                . '}'
-                . '">';
+                ) .
+                '" ' .
+                'onkeydown="' .
+                'if(event.key===\'Enter\'){' .
+                'event.preventDefault();' .
+                'event.stopPropagation();' .
+                'return false;' .
+                '}' .
+                '">';
 
             $this->renderer->tablecell_close();
         }
 
-        /*
-         * Empty action cell at the end.
-         */
         $this->renderer->tablecell_open();
 
         $this->renderer->doc .=
-            '<button type="submit" '
-            . 'name="plm_action" '
-            . 'value="create" '
-            . 'class="plm_table_create_button">'
-            . hsc('Create')
-            . '</button>';
+            '<button type="submit" ' .
+            'name="plm_action" ' .
+            'value="create" ' .
+            'class="plm_table_create_button">' .
+            hsc('Create') .
+            '</button>';
 
         $this->renderer->tablecell_close();
 
         $this->renderer->tablerow_close();
     }
 
-    /**
-     * Render the FILTER row.
-     */
     private function renderFilterRow(
         string $name,
         array $columns,
@@ -1161,50 +1742,44 @@ class PlmTable
                 );
 
             $this->renderer->doc .=
-                '<input type="text" '
-                . 'name="plm_filter['
-                . hsc($column)
-                . ']" '
-                . 'value="'
-                . hsc($value)
-                . '" '
-                . 'placeholder="'
-                . hsc(
+                '<input type="text" ' .
+                'name="plm_filter[' .
+                hsc($column) .
+                ']" ' .
+                'value="' .
+                hsc($value) .
+                '" ' .
+                'placeholder="' .
+                hsc(
                     'Filter ' . $column
-                )
-                . '" '
-                . 'onkeydown="'
-                . 'if(event.key===\'Enter\'){'
-                . 'event.preventDefault();'
-                . 'event.stopPropagation();'
-                . 'return false;'
-                . '}'
-                . '">';
+                ) .
+                '" ' .
+                'onkeydown="' .
+                'if(event.key===\'Enter\'){' .
+                'event.preventDefault();' .
+                'event.stopPropagation();' .
+                'return false;' .
+                '}' .
+                '">';
 
             $this->renderer->tablecell_close();
         }
 
-        /*
-         * Filter button at the end.
-         */
         $this->renderer->tablecell_open();
 
         $this->renderer->doc .=
-            '<button type="submit" '
-            . 'name="plm_action" '
-            . 'value="filter" '
-            . 'class="plm_table_filter_button">'
-            . hsc('Filter')
-            . '</button>';
+            '<button type="submit" ' .
+            'name="plm_action" ' .
+            'value="filter" ' .
+            'class="plm_table_filter_button">' .
+            hsc('Filter') .
+            '</button>';
 
         $this->renderer->tablecell_close();
 
         $this->renderer->tablerow_close();
     }
 
-    /**
-     * Display a technical PLM error.
-     */
     private function error(
         string $message
     ): void {
@@ -1213,5 +1788,87 @@ class PlmTable
             '<div class="error">' .
             hsc($message) .
             '</div>';
+    }
+
+    /**
+     * Check whether an outer pair of parentheses
+     * encloses the complete expression.
+     */
+    private function hasMatchingOuterParentheses(
+        string $value
+    ): bool {
+
+        $depth = 0;
+        $length = strlen($value);
+
+        for (
+            $i = 0;
+            $i < $length;
+            $i++
+        ) {
+
+            if ($value[$i] === '(') {
+                $depth++;
+            } elseif ($value[$i] === ')') {
+
+                $depth--;
+
+                if (
+                    $depth === 0 &&
+                    $i < $length - 1
+                ) {
+                    return false;
+                }
+            }
+
+            if ($depth < 0) {
+                return false;
+            }
+        }
+
+        return $depth === 0;
+    }
+}
+
+
+/**
+ * Lightweight wrapper around a Struct Search object
+ * with a filtered subset of rows/RIDs/PIDs.
+ *
+ * PlmTable only needs these methods after its
+ * application-level Lookup filtering.
+ */
+class PlmTableFilteredSearch
+{
+    private $search;
+
+    private array $pids;
+
+    private array $rids;
+
+    public function __construct(
+        $search,
+        array $pids,
+        array $rids
+    ) {
+        $this->search = $search;
+        $this->pids = $pids;
+        $this->rids = $rids;
+    }
+
+    public function getColumns()
+    {
+        return
+            $this->search->getColumns();
+    }
+
+    public function getPids(): array
+    {
+        return $this->pids;
+    }
+
+    public function getRids(): array
+    {
+        return $this->rids;
     }
 }

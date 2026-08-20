@@ -16,8 +16,21 @@ class PlmStruct
         '~',
     ];
 
-    private function parseFilter(
-        string $filter
+    /**
+     * Parse a single Struct filter condition.
+     *
+     * Returns:
+     *
+     *     [
+     *         field,
+     *         operator,
+     *         value,
+     *         logic
+     *     ]
+     */
+    private function parseFilterCondition(
+        string $filter,
+        string $logic = 'AND'
     ): array {
 
         $filter =
@@ -25,9 +38,28 @@ class PlmStruct
                 $filter
             );
 
+        /*
+         * Remove wrapping parentheses.
+         */
+        while (
+            strlen($filter) >= 2 &&
+            $filter[0] === '(' &&
+            $filter[strlen($filter) - 1] === ')' &&
+            $this->hasMatchingOuterParentheses($filter)
+        ) {
+
+            $filter =
+                trim(
+                    substr(
+                        $filter,
+                        1,
+                        -1
+                    )
+                );
+        }
+
         foreach (
-            self::FILTER_OPERATORS
-            as $operator
+            self::FILTER_OPERATORS as $operator
         ) {
 
             $pos =
@@ -74,13 +106,186 @@ class PlmStruct
                 $field,
                 $operator,
                 $value,
-                'OR',
+                $logic,
             ];
         }
 
         throw new \RuntimeException(
             'Invalid filter syntax. Expected field/operator/value.'
         );
+    }
+
+    /**
+     * Parse a PLM filter into Struct filter conditions.
+     *
+     * Supports:
+     *
+     *     field=value
+     *     field=value AND other=value
+     *     (field=value) AND (other=value)
+     *
+     * OR is supported as well.
+     */
+    private function parseFilters(
+        string $filter
+    ): array {
+
+        $filter =
+            trim(
+                $filter
+            );
+
+        if ($filter === '') {
+            throw new \RuntimeException(
+                'Filter must not be empty.'
+            );
+        }
+
+        $parts = [];
+        $operators = [];
+
+        $buffer = '';
+        $depth = 0;
+        $length = strlen($filter);
+
+        for (
+            $i = 0;
+            $i < $length;
+            $i++
+        ) {
+
+            $char =
+                $filter[$i];
+
+            if ($char === '(') {
+
+                $depth++;
+                $buffer .= $char;
+
+                continue;
+            }
+
+            if ($char === ')') {
+
+                if ($depth > 0) {
+                    $depth--;
+                }
+
+                $buffer .= $char;
+
+                continue;
+            }
+
+            if ($depth === 0) {
+
+                $remaining =
+                    substr(
+                        $filter,
+                        $i
+                    );
+
+                if (
+                    preg_match(
+                        '/^\s+(AND|OR)\s+/i',
+                        $remaining,
+                        $match
+                    )
+                ) {
+
+                    $parts[] =
+                        trim(
+                            $buffer
+                        );
+
+                    $operators[] =
+                        strtoupper(
+                            $match[1]
+                        );
+
+                    $buffer = '';
+
+                    $i +=
+                        strlen(
+                            $match[0]
+                        ) - 1;
+
+                    continue;
+                }
+            }
+
+            $buffer .= $char;
+        }
+
+        $buffer =
+            trim(
+                $buffer
+            );
+
+        if ($buffer !== '') {
+            $parts[] = $buffer;
+        }
+
+        if (empty($parts)) {
+            throw new \RuntimeException(
+                'Invalid filter syntax.'
+            );
+        }
+
+        if (
+            count($operators) !==
+            count($parts) - 1
+        ) {
+            throw new \RuntimeException(
+                'Invalid filter logic.'
+            );
+        }
+
+        $conditions = [];
+
+        foreach (
+            $parts as $index => $part
+        ) {
+
+            $logic =
+                $index === 0
+                    ? 'AND'
+                    : (
+                        $operators[$index - 1]
+                        ?? 'AND'
+                    );
+
+            $conditions[] =
+                $this->parseFilterCondition(
+                    $part,
+                    $logic
+                );
+        }
+
+        return $conditions;
+    }
+
+    /**
+     * Parse one filter.
+     *
+     * Kept for callers which expect a single
+     * condition.
+     */
+    private function parseFilter(
+        string $filter
+    ): array {
+
+        $filters =
+            $this->parseFilters(
+                $filter
+            );
+
+        if (count($filters) !== 1) {
+            throw new \RuntimeException(
+                'Expected exactly one filter condition.'
+            );
+        }
+
+        return $filters[0];
     }
 
     /**
@@ -107,11 +312,15 @@ class PlmStruct
                 )
             );
 
+        /*
+         * Remove PLM _pk from the actual Struct columns.
+         */
         $structFields =
             array_values(
                 array_filter(
                     $fields,
                     function ($field) {
+
                         return
                             $field !==
                             self::PRIMARY_KEY_FIELD;
@@ -119,44 +328,48 @@ class PlmStruct
                 )
             );
 
-        $parsedFilter = null;
+        $parsedFilters = [];
 
         if (
             $filter !== null &&
             trim($filter) !== ''
         ) {
 
-            $parsedFilter =
-                $this->parseFilter(
+            $parsedFilters =
+                $this->parseFilters(
                     $filter
                 );
 
-            $filterField =
-                $parsedFilter[0];
-
-            if (
-                $filterField ===
-                self::PRIMARY_KEY_FIELD
+            foreach (
+                $parsedFilters as $parsedFilter
             ) {
 
-                /*
-                 * _pk is handled by findOne().
-                 *
-                 * It must never reach SearchConfig.
-                 */
-                throw new \RuntimeException(
-                    'PLM _pk filters must be resolved through findByPrimaryKey().'
-                );
-            }
+                $filterField =
+                    $parsedFilter[0];
 
-            if (!in_array(
-                $filterField,
-                $structFields,
-                true
-            )) {
+                if (
+                    $filterField ===
+                    self::PRIMARY_KEY_FIELD
+                ) {
 
-                $structFields[] =
-                    $filterField;
+                    /*
+                     * _pk is deliberately not passed
+                     * to SearchConfig.
+                     */
+                    throw new \RuntimeException(
+                        'PLM _pk filters must be resolved through findByPrimaryKey().'
+                    );
+                }
+
+                if (!in_array(
+                    $filterField,
+                    $structFields,
+                    true
+                )) {
+
+                    $structFields[] =
+                        $filterField;
+                }
             }
         }
 
@@ -206,15 +419,22 @@ class PlmStruct
             'schemas' => [
                 [$schema, ''],
             ],
+
             'cols' =>
                 $structFields,
         ];
 
-        if ($parsedFilter !== null) {
+        if (!empty($parsedFilters)) {
 
-            $structConfig['filter'] = [
-                $parsedFilter,
-            ];
+            $structConfig['filter'] = [];
+
+            foreach (
+                $parsedFilters as $parsedFilter
+            ) {
+
+                $structConfig['filter'][] =
+                    $parsedFilter;
+            }
         }
 
         $search =
@@ -222,12 +442,15 @@ class PlmStruct
                 $structConfig
             );
 
+        $rows =
+            $search->getRows();
+
         return [
             'search' =>
                 $search,
 
             'rows' =>
-                $search->getRows(),
+                $rows,
         ];
     }
 
@@ -423,6 +646,184 @@ class PlmStruct
         return null;
     }
 
+    /**
+     * Determine whether a Struct Column is a Lookup.
+     */
+    public function isLookupColumn(
+        $column
+    ): bool {
+
+        if (
+            !is_object($column) ||
+            !method_exists(
+                $column,
+                'getType'
+            )
+        ) {
+            return false;
+        }
+
+        return
+            $column->getType()
+            instanceof \dokuwiki\plugin\struct\types\Lookup;
+    }
+
+    /**
+     * Return the referenced Struct RID(s) of a Lookup Value.
+     *
+     * Struct Lookup values can arrive in several forms.
+     *
+     * Typical value:
+     *
+     *     ["[\"\",1]","PRD-MC1210F"]
+     *
+     * The outer value is JSON and the first element is
+     * itself JSON:
+     *
+     *     ["",1]
+     *
+     * The second element of the inner array is the
+     * referenced Struct RID.
+     */
+    public function getLookupPrimaryKeys(
+        $value
+    ): array {
+
+        if (
+            !is_object($value) ||
+            !method_exists(
+                $value,
+                'getValue'
+            )
+        ) {
+            return [];
+        }
+
+        $raw =
+            $value->getValue();
+
+        /*
+         * Normalize the outer value.
+         *
+         * getValue() may return:
+         *
+         *     string
+         *     array
+         */
+        if (is_string($raw)) {
+
+            $decoded =
+                json_decode(
+                    $raw,
+                    true
+                );
+
+            if (
+                json_last_error() !== JSON_ERROR_NONE ||
+                !is_array($decoded)
+            ) {
+                return [];
+            }
+
+            $raw =
+                $decoded;
+        }
+
+        if (!is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        $result = [];
+
+        foreach (
+            $raw as $item
+        ) {
+
+            /*
+             * Normal case:
+             *
+             *     $item = '["",1]'
+             */
+            if (is_string($item)) {
+
+                $decoded =
+                    json_decode(
+                        $item,
+                        true
+                    );
+
+                if (
+                    json_last_error() === JSON_ERROR_NONE &&
+                    is_array($decoded) &&
+                    count($decoded) >= 2
+                ) {
+
+                    $rid =
+                        $decoded[1];
+
+                    if (
+                        is_int($rid) ||
+                        (
+                            is_string($rid) &&
+                            ctype_digit($rid)
+                        )
+                    ) {
+
+                        $rid =
+                            (int) $rid;
+
+                        if ($rid > 0) {
+                            $result[] =
+                                $rid;
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            /*
+             * Also support an already decoded lookup pair:
+             *
+             *     ['', 1]
+             */
+            if (
+                is_array($item) &&
+                count($item) >= 2
+            ) {
+
+                $rid =
+                    $item[1];
+
+                if (
+                    is_int($rid) ||
+                    (
+                        is_string($rid) &&
+                        ctype_digit($rid)
+                    )
+                ) {
+
+                    $rid =
+                        (int) $rid;
+
+                    if ($rid > 0) {
+                        $result[] =
+                            $rid;
+                    }
+                }
+            }
+        }
+
+        return array_values(
+            array_unique(
+                $result
+            )
+        );
+    }
+
+    /**
+     * Get the access object for a Struct record.
+     */
     public function getAccessForRecord(
         string $schema,
         string $pid,
@@ -445,6 +846,7 @@ class PlmStruct
             $pid !== '' &&
             $rid === 0
         ) {
+
             return
                 \dokuwiki\plugin\struct\meta\AccessTable::getPageAccess(
                     $schema,
@@ -456,6 +858,7 @@ class PlmStruct
             $pid !== '' &&
             $rid > 0
         ) {
+
             return
                 \dokuwiki\plugin\struct\meta\AccessTable::getSerialAccess(
                     $schema,
@@ -549,5 +952,46 @@ class PlmStruct
     ): void {
 
         $access->clearData();
+    }
+
+    /**
+     * Check whether an outer pair of parentheses matches
+     * the complete expression.
+     */
+    private function hasMatchingOuterParentheses(
+        string $value
+    ): bool {
+
+        $depth = 0;
+        $length = strlen($value);
+
+        for (
+            $i = 0;
+            $i < $length;
+            $i++
+        ) {
+
+            if ($value[$i] === '(') {
+
+                $depth++;
+
+            } elseif ($value[$i] === ')') {
+
+                $depth--;
+
+                if (
+                    $depth === 0 &&
+                    $i < $length - 1
+                ) {
+                    return false;
+                }
+            }
+
+            if ($depth < 0) {
+                return false;
+            }
+        }
+
+        return $depth === 0;
     }
 }

@@ -8,6 +8,18 @@ class PlmSelect
 
     private $state;
 
+    /**
+     * Selection results are kept for the duration
+     * of the current PHP request.
+     *
+     * This allows:
+     *
+     *     $partselect._pk
+     *
+     * to be used by a following PLM table.
+     */
+    private static array $selections = [];
+
     private const FIELD_PATTERN =
         '[a-zA-Z0-9]+(?:[_.-][a-zA-Z0-9]+)*';
 
@@ -25,6 +37,62 @@ class PlmSelect
         $this->state = $state;
     }
 
+    /**
+     * Get a value exported by a previous PLM select.
+     *
+     * Example:
+     *
+     *     $partselect._pk
+     */
+    public static function getSelectionValue(
+        string $name,
+        string $field
+    ): ?string {
+
+        if (
+            !isset(
+                self::$selections[$name]
+            )
+        ) {
+            return null;
+        }
+
+        if (
+            !array_key_exists(
+                $field,
+                self::$selections[$name]
+            )
+        ) {
+            return null;
+        }
+
+        $value =
+            self::$selections[$name][$field];
+
+        if ($value === null) {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * Store the selected record for later
+     * PLM elements in the same render request.
+     */
+    private static function storeSelection(
+        string $name,
+        array $record
+    ): void {
+
+        self::$selections[$name] = [
+            PlmStruct::PRIMARY_KEY_FIELD =>
+                (string) (
+                    $record['rid'] ?? 0
+                ),
+        ];
+    }
+
     public function render(
         string $name,
         string $schema,
@@ -32,6 +100,14 @@ class PlmSelect
         string $content,
         string $errortext = 'not found!'
     ): void {
+
+        /*
+         * A new render of the same named select must
+         * replace an older value.
+         */
+        unset(
+            self::$selections[$name]
+        );
 
         if ($schema === '') {
 
@@ -76,10 +152,9 @@ class PlmSelect
         try {
 
             /*
-             * findOne() is deliberately used here.
+             * findOne() centrally handles:
              *
-             * This is important because findOne()
-             * centrally handles the special _pk field.
+             *     _pk=123
              */
             $record =
                 $this->struct->findOne(
@@ -104,14 +179,23 @@ class PlmSelect
                 return;
             }
 
+            /*
+             * Export the technical RID so a later
+             * PLM table can use:
+             *
+             *     $name._pk
+             */
+            self::storeSelection(
+                $name,
+                $record
+            );
+
             $row =
                 $record['row'];
 
             /*
-             * We need the column indexes from the same
-             * Struct search used to obtain the row.
-             *
-             * Search all requested fields again.
+             * We need the column indexes from a
+             * normal Struct search.
              */
             $fields =
                 $this->getStructFields(
@@ -180,9 +264,6 @@ class PlmSelect
 
             if ($matchedRow === null) {
 
-                /*
-                 * Fallback: the original row.
-                 */
                 $matchedRow =
                     $row;
             }
@@ -201,6 +282,14 @@ class PlmSelect
 
         } catch (Throwable $e) {
 
+            /*
+             * Do not leave a stale selection behind
+             * when the select failed.
+             */
+            unset(
+                self::$selections[$name]
+            );
+
             $this->error(
                 'PLM select: ' .
                 $e->getMessage()
@@ -218,6 +307,36 @@ class PlmSelect
 
         $hasEmptyParameter = false;
 
+        /*
+         * URI parameter:
+         *
+         *     &_pk
+         */
+        $filter =
+            preg_replace_callback(
+                '/&([a-zA-Z0-9_-]+)/',
+                function ($match)
+                    use (&$hasEmptyParameter) {
+
+                    $value =
+                        $this->getUriParam(
+                            $match[1]
+                        );
+
+                    if ($value === '') {
+                        $hasEmptyParameter = true;
+                    }
+
+                    return $value;
+                },
+                $filter
+            );
+
+        /*
+         * Existing PLM state reference:
+         *
+         *     $table.field
+         */
         $filter =
             preg_replace_callback(
                 '/\$(' .
@@ -262,6 +381,16 @@ class PlmSelect
         }
 
         return $filter;
+    }
+
+    private function getUriParam(
+        string $name
+    ): string {
+
+        global $INPUT;
+
+        return
+            $INPUT->str($name) ?? '';
     }
 
     private function getStructFields(
