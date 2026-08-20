@@ -8,25 +8,21 @@ class PlmSelect
     /** @var PlmStruct */
     private $struct;
 
+    /** @var PlmState */
+    private $state;
+
     public function __construct(
         Doku_Renderer $renderer,
-        PlmStruct $struct
+        PlmStruct $struct,
+        PlmState $state
     ) {
         $this->renderer = $renderer;
         $this->struct = $struct;
+        $this->state = $state;
     }
 
-    /**
-     * Render the first matching Struct record.
-     *
-     * Example:
-     *
-     * /plm:select > plm_part[ipn~*&ipn*]
-     * __Current Filter: &ipn__
-     * User: &user
-     * /plm
-     */
     public function render(
+        string $name,
         string $schema,
         string $filter,
         string $content
@@ -48,15 +44,23 @@ class PlmSelect
             }
 
             /*
-             * Expand URI parameters in the filter.
+             * State parameters.
              *
              * Example:
              *
-             *     ipn~*&ipn*
+             *     $tablecompanies.name
              *
-             * becomes:
+             * becomes the value stored in:
              *
-             *     ipn~*PRD*
+             *     filter.tablecompanies.name
+             */
+            $filter =
+                $this->replaceStateParameters(
+                    $filter
+                );
+
+            /*
+             * URI parameters.
              */
             $filter =
                 $this->replaceUriParameters(
@@ -72,17 +76,12 @@ class PlmSelect
                     $filter
                 );
 
-            /*
-             * No matching record:
-             *
-             * render nothing.
-             */
             if ($record === null) {
                 return;
             }
 
             /*
-             * Get access for the exact record.
+             * Get access for exact record.
              */
             $access =
                 $this->struct->getAccessForRecord(
@@ -100,10 +99,7 @@ class PlmSelect
                 );
 
             /*
-             * Replace variables in the content.
-             *
-             * $field = Struct field
-             * &param  = URI parameter
+             * Replace variables in content.
              */
             $content =
                 $this->replaceVariables(
@@ -127,6 +123,32 @@ class PlmSelect
         }
     }
 
+    /**
+     * Replace:
+     *
+     *     $tablecompanies.name
+     *
+     * with the value from PlmState.
+     */
+    private function replaceStateParameters(
+        string $text
+    ): string {
+
+        return preg_replace_callback(
+            '/\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_.-]+)/',
+            function ($match) {
+
+                return $this->state->get(
+                    'filter.' .
+                    $match[1] .
+                    '.' .
+                    $match[2]
+                );
+            },
+            $text
+        );
+    }
+
     private function replaceUriParameters(
         string $text
     ): string {
@@ -142,56 +164,41 @@ class PlmSelect
                         $match[2]
                     );
 
-                /*
-                * Empty parameter:
-                *
-                *     " &ipn" -> ""
-                */
                 if ($value === '') {
                     return '';
                 }
 
-                /*
-                * Parameter exists:
-                *
-                *     " &ipn" -> " PRD"
-                */
                 return $whitespace . $value;
             },
             $text
         );
     }
 
-    /**
-     * Replace variables in the Select content.
-     *
-     * Struct fields:
-     *
-     *     $ipn
-     *     $description
-     *
-     * URI parameters:
-     *
-     *     &ipn
-     *     &user
-     */
     private function replaceVariables(
         string $content,
         array $data
     ): string {
 
         /*
-         * -----------------------------------------------------
-         * Struct fields
-         * -----------------------------------------------------
-         *
-         * Example:
-         *
-         *     $ipn
-         *
-         * becomes:
-         *
-         *     PRD-123
+         * State variables.
+         */
+        $content =
+            preg_replace_callback(
+                '/\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_.-]+)/',
+                function ($match) {
+
+                    return $this->state->get(
+                        'filter.' .
+                        $match[1] .
+                        '.' .
+                        $match[2]
+                    );
+                },
+                $content
+            );
+
+        /*
+         * Struct fields.
          */
         $content =
             preg_replace_callback(
@@ -207,26 +214,7 @@ class PlmSelect
             );
 
         /*
-         * -----------------------------------------------------
-         * URI parameters
-         * -----------------------------------------------------
-         *
-         * Example:
-         *
-         *     &ipn
-         *
-         * becomes:
-         *
-         *     PRD-123
-         *
-         * Because "_" is not part of the URI parameter
-         * syntax, this also works:
-         *
-         *     __Current Filter: &ipn__
-         *
-         * resulting in:
-         *
-         *     __Current Filter: PRD-123__
+         * URI parameters.
          */
         $content =
             $this->replaceUriParameters(
@@ -236,9 +224,6 @@ class PlmSelect
         return $content;
     }
 
-    /**
-     * Get Struct column value.
-     */
     private function getColumnValue(
         array $data,
         string $name
@@ -254,9 +239,6 @@ class PlmSelect
         $value =
             $data[$name];
 
-        /*
-         * Struct value object.
-         */
         if (
             is_object($value) &&
             method_exists(
@@ -269,9 +251,6 @@ class PlmSelect
                 $value->getDisplayValue();
         }
 
-        /*
-         * Multi-value field.
-         */
         if (is_array($value)) {
 
             return implode(
@@ -290,9 +269,6 @@ class PlmSelect
         return (string) $value;
     }
 
-    /**
-     * Render generated DokuWiki markup.
-     */
     private function renderMarkup(
         string $content
     ): void {
@@ -301,9 +277,6 @@ class PlmSelect
             return;
         }
 
-        /*
-         * Parse generated content as DokuWiki markup.
-         */
         $instructions =
             p_get_instructions(
                 $content
@@ -322,9 +295,6 @@ class PlmSelect
             $html;
     }
 
-    /**
-     * Get URI parameter.
-     */
     private function getUriParam(
         string $name
     ): string {
@@ -341,9 +311,6 @@ class PlmSelect
         return (string) $value;
     }
 
-    /**
-     * Display error.
-     */
     private function error(
         string $message
     ): void {

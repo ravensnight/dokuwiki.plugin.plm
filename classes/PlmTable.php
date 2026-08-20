@@ -11,17 +11,23 @@ class PlmTable
     /** @var PlmParser */
     private $parser;
 
+    /** @var PlmState */
+    private $state;
+
     public function __construct(
         Doku_Renderer $renderer,
         PlmStruct $struct,
-        PlmParser $parser
+        PlmParser $parser,
+        PlmState $state
     ) {
         $this->renderer = $renderer;
         $this->struct = $struct;
         $this->parser = $parser;
+        $this->state = $state;
     }
 
     public function render(
+        string $name,
         string $schema,
         string $filter,
         string $content
@@ -84,6 +90,7 @@ class PlmTable
         }
 
         $this->renderTable(
+            $name,
             $columns,
             $search,
             $rows,
@@ -185,11 +192,6 @@ class PlmTable
             return null;
         }
 
-        /*
-         * Token 0 = Template name
-         * Token 1 = Label
-         * Token 2+ = Template content
-         */
         $text =
             implode(
                 ' ',
@@ -199,11 +201,6 @@ class PlmTable
                 )
             );
 
-        /*
-         * Struct fields:
-         *
-         *     $ipn
-         */
         $text =
             preg_replace_callback(
                 '/\$([a-zA-Z0-9_.-]+)/',
@@ -228,11 +225,6 @@ class PlmTable
                 $text
             );
 
-        /*
-         * URI parameters:
-         *
-         *     &ipn
-         */
         $text =
             preg_replace_callback(
                 '/&([a-zA-Z0-9_-]+)/',
@@ -249,6 +241,7 @@ class PlmTable
     }
 
     private function renderTable(
+        string $name,
         array $columns,
         $search,
         array $rows,
@@ -273,6 +266,34 @@ class PlmTable
                 $column->getTranslatedLabel();
         }
 
+        /*
+         * -----------------------------------------------------
+         * TEST / STATE
+         * -----------------------------------------------------
+         *
+         * Store the first row's "name" value in the
+         * component state.
+         *
+         * This is deliberately temporary and will later
+         * be replaced by the real filter handling.
+         */
+        $firstRow =
+            $rows[0] ?? null;
+
+        if (
+            $firstRow !== null &&
+            isset($fieldIndexes['name'])
+        ) {
+
+            $this->state->setFilter(
+                $name,
+                'name',
+                $firstRow[
+                    $fieldIndexes['name']
+                ]->getDisplayValue()
+            );
+        }
+
         $this->renderer->table_open();
 
         /*
@@ -291,7 +312,7 @@ class PlmTable
                 )
             ) {
 
-                $name =
+                $templateName =
                     substr(
                         $column,
                         1
@@ -300,18 +321,18 @@ class PlmTable
                 if (
                     isset($params['template']) &&
                     ($params['template'][0] ?? null)
-                        === $name
+                        === $templateName
                 ) {
 
                     $this->renderer->cdata(
                         $params['template'][1]
-                            ?? $name
+                            ?? $templateName
                     );
 
                 } else {
 
                     $this->renderer->cdata(
-                        $name
+                        $templateName
                     );
                 }
 
@@ -346,7 +367,7 @@ class PlmTable
                     )
                 ) {
 
-                    $name =
+                    $templateName =
                         substr(
                             $column,
                             1
@@ -355,7 +376,7 @@ class PlmTable
                     $expanded =
                         $this->expandTemplate(
                             $params['template'] ?? [],
-                            $name,
+                            $templateName,
                             $row,
                             $fieldIndexes
                         );

@@ -11,20 +11,26 @@ class PlmForm
     /** @var PlmParser */
     private $parser;
 
+    /** @var PlmState */
+    private $state;
+
     public function __construct(
         Doku_Renderer $renderer,
         PlmStruct $struct,
-        PlmParser $parser
+        PlmParser $parser,
+        PlmState $state
     ) {
         $this->renderer = $renderer;
         $this->struct = $struct;
         $this->parser = $parser;
+        $this->state = $state;
     }
 
     /**
      * Render the PLM form.
      */
     public function render(
+        string $name,
         string $schema,
         string $filter,
         string $content
