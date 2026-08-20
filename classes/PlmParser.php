@@ -10,7 +10,6 @@ class PlmParser
         $params = [];
 
         foreach (preg_split('/\R/', $content) as $line) {
-
             $line = trim($line);
 
             if ($line === '') {
@@ -27,16 +26,11 @@ class PlmParser
                 );
             }
 
-            $name =
-                strtolower(
-                    $match[1]
-                );
-
-            $value =
-                $match[2];
+            $name = strtolower($match[1]);
+            $value = $match[2];
 
             /*
-             * field and action remain line based.
+             * These parameters are line based.
              *
              * Example:
              *
@@ -44,38 +38,28 @@ class PlmParser
              * field: description readonly
              *
              * action: update "Speichern" :parts:part?ipn=$ipn
+             * action: create "Create" :parts:part?ipn=$ipn
+             *
+             * delete is deliberately NOT treated as a line based
+             * list here. It is normalized below because exactly
+             * one field is allowed.
              */
             if (
                 $name === 'field' ||
                 $name === 'action'
             ) {
-
                 $params[$name][] =
-                    $this->tokenize(
-                        $value
-                    );
+                    $this->tokenize($value);
 
                 continue;
             }
 
-            /*
-             * All other parameters are normal
-             * comma-separated lists.
-             *
-             * Examples:
-             *
-             * cols: ipn, description, @link_edit
-             * create: ipn, description
-             * filter: ipn
-             */
             $params[$name][] =
-                $this->tokenizeList(
-                    $value
-                );
+                $this->tokenize($value);
         }
 
         /*
-         * Flatten normal list parameters.
+         * Flatten normal parameters.
          */
         foreach ($params as $name => $values) {
 
@@ -88,166 +72,78 @@ class PlmParser
 
             $flattened = [];
 
-            foreach ($values as $items) {
-
-                foreach ($items as $item) {
-
-                    $item =
-                        trim(
-                            $item
-                        );
-
-                    if ($item !== '') {
-                        $flattened[] =
-                            $item;
-                    }
+            foreach ($values as $tokens) {
+                foreach ($tokens as $token) {
+                    $flattened[] = $token;
                 }
             }
 
-            $params[$name] =
-                $flattened;
+            $params[$name] = $flattened;
+        }
+
+        /*
+         * cols has its own syntax:
+         *
+         * cols: $ipn, $description, @link
+         */
+        if (isset($params['cols'])) {
+            $params['cols'] =
+                $this->parseColumns(
+                    $params['cols']
+                );
+        }
+
+        /*
+         * delete has exactly one field.
+         *
+         * Example:
+         *
+         * delete: ipn
+         */
+        if (isset($params['delete'])) {
+
+            if (count($params['delete']) !== 1) {
+                throw new InvalidArgumentException(
+                    'PLM parameter "delete" requires exactly one field.'
+                );
+            }
+
+            $deleteField =
+                trim(
+                    $params['delete'][0]
+                );
+
+            if (!preg_match(
+                '/^[a-zA-Z0-9_.-]+$/',
+                $deleteField
+            )) {
+                throw new InvalidArgumentException(
+                    'Invalid PLM delete field: ' .
+                    $deleteField
+                );
+            }
+
+            $params['delete'] =
+                $deleteField;
         }
 
         return $params;
     }
 
     /**
-     * Tokenize a comma-separated parameter list.
-     *
-     * Quoted values may contain commas.
-     *
-     * Example:
-     *
-     *     cols: ipn, description, @link
-     */
-    private function tokenizeList(
-        string $value
-    ): array {
-
-        $tokens = [];
-        $buffer = '';
-
-        $length =
-            strlen(
-                $value
-            );
-
-        $pos = 0;
-        $inQuotes = false;
-
-        while ($pos < $length) {
-
-            $char =
-                $value[$pos];
-
-            /*
-             * Handle quoted strings.
-             */
-            if ($char === '"') {
-
-                $inQuotes =
-                    !$inQuotes;
-
-                $buffer .=
-                    $char;
-
-                $pos++;
-                continue;
-            }
-
-            /*
-             * Comma outside quotes separates
-             * list entries.
-             */
-            if (
-                $char === ',' &&
-                !$inQuotes
-            ) {
-
-                $token =
-                    trim(
-                        $buffer
-                    );
-
-                if ($token !== '') {
-
-                    /*
-                     * Remove surrounding quotes and
-                     * process escaped characters.
-                     */
-                    $parsed =
-                        $this->tokenize(
-                            $token
-                        );
-
-                    foreach ($parsed as $part) {
-                        $tokens[] =
-                            $part;
-                    }
-                }
-
-                $buffer = '';
-                $pos++;
-
-                continue;
-            }
-
-            $buffer .=
-                $char;
-
-            $pos++;
-        }
-
-        /*
-         * Last token.
-         */
-        $token =
-            trim(
-                $buffer
-            );
-
-        if ($token !== '') {
-
-            $parsed =
-                $this->tokenize(
-                    $token
-                );
-
-            foreach ($parsed as $part) {
-                $tokens[] =
-                    $part;
-            }
-        }
-
-        return $tokens;
-    }
-
-    /**
      * Tokenize a single parameter value.
      */
-    private function tokenize(
-        string $value
-    ): array {
-
+    private function tokenize(string $value): array
+    {
         $tokens = [];
-
-        $length =
-            strlen(
-                $value
-            );
-
+        $length = strlen($value);
         $pos = 0;
 
         while ($pos < $length) {
 
-            /*
-             * Skip whitespace.
-             */
             while (
                 $pos < $length &&
-                ctype_space(
-                    $value[$pos]
-                )
+                ctype_space($value[$pos])
             ) {
                 $pos++;
             }
@@ -256,11 +152,7 @@ class PlmParser
                 break;
             }
 
-            /*
-             * Quoted token.
-             */
             if ($value[$pos] === '"') {
-
                 $pos++;
 
                 $buffer = '';
@@ -270,51 +162,29 @@ class PlmParser
 
                     if ($value[$pos] === '\\') {
 
-                        if (
-                            $pos + 1 >=
-                            $length
-                        ) {
-
-                            $buffer .=
-                                '\\';
-
+                        if ($pos + 1 >= $length) {
+                            $buffer .= '\\';
                             $pos++;
                             continue;
                         }
 
-                        $next =
-                            $value[
-                                $pos + 1
-                            ];
+                        $next = $value[$pos + 1];
 
                         switch ($next) {
 
                             case '"':
-
-                                $buffer .=
-                                    '"';
-
+                                $buffer .= '"';
                                 $pos += 2;
-
                                 break;
 
                             case '\\':
-
-                                $buffer .=
-                                    '\\';
-
+                                $buffer .= '\\';
                                 $pos += 2;
-
                                 break;
 
                             default:
-
-                                $buffer .=
-                                    '\\' .
-                                    $next;
-
+                                $buffer .= '\\' . $next;
                                 $pos += 2;
-
                                 break;
                         }
 
@@ -322,56 +192,63 @@ class PlmParser
                     }
 
                     if ($value[$pos] === '"') {
-
                         $pos++;
-
                         $closed = true;
-
                         break;
                     }
 
-                    $buffer .=
-                        $value[$pos];
-
+                    $buffer .= $value[$pos];
                     $pos++;
                 }
 
                 if (!$closed) {
-
                     throw new InvalidArgumentException(
                         'Unterminated quoted PLM parameter value'
                     );
                 }
 
-                $tokens[] =
-                    $buffer;
-
+                $tokens[] = $buffer;
                 continue;
             }
 
-            /*
-             * Normal token.
-             */
-            $start =
-                $pos;
+            $start = $pos;
 
             while (
                 $pos < $length &&
-                !ctype_space(
-                    $value[$pos]
-                )
+                !ctype_space($value[$pos])
             ) {
                 $pos++;
             }
 
-            $tokens[] =
-                substr(
-                    $value,
-                    $start,
-                    $pos - $start
-                );
+            $tokens[] = substr(
+                $value,
+                $start,
+                $pos - $start
+            );
         }
 
         return $tokens;
+    }
+
+    /**
+     * Parse column definitions.
+     */
+    private function parseColumns(array $tokens): array
+    {
+        $result = [];
+
+        foreach ($tokens as $token) {
+            $parts = explode(',', $token);
+
+            foreach ($parts as $part) {
+                $part = trim($part);
+
+                if ($part !== '') {
+                    $result[] = $part;
+                }
+            }
+        }
+
+        return $result;
     }
 }

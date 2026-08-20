@@ -63,18 +63,11 @@ class PlmTable
                     $params
                 );
 
-            /*
-             * Expand explicit filter from
-             * the PLM header.
-             */
             $filter =
                 $this->expandFilter(
                     $filter
                 );
 
-            /*
-             * Add filters from PlmState.
-             */
             $stateFilter =
                 $this->buildStateFilter(
                     $name
@@ -269,9 +262,6 @@ class PlmTable
 
         $fields = [];
 
-        /*
-         * Visible columns.
-         */
         foreach (
             $params['cols'] ?? []
             as $col
@@ -290,9 +280,6 @@ class PlmTable
                 $col;
         }
 
-        /*
-         * Filter fields.
-         */
         foreach (
             $this->getConfiguredFields(
                 $params['filter'] ?? []
@@ -304,9 +291,6 @@ class PlmTable
                 $field;
         }
 
-        /*
-         * Create fields.
-         */
         foreach (
             $this->getConfiguredFields(
                 $params['create'] ?? []
@@ -319,8 +303,18 @@ class PlmTable
         }
 
         /*
-         * Fields referenced by templates.
+         * Delete field must always be available
+         * in every data row.
          */
+        if (
+            isset($params['delete']) &&
+            is_string($params['delete'])
+        ) {
+
+            $fields[] =
+                $params['delete'];
+        }
+
         foreach (
             $params['template'] ?? []
             as $token
@@ -458,9 +452,6 @@ class PlmTable
                 $column->getTranslatedLabel();
         }
 
-        /*
-         * Explicit action fields.
-         */
         $filterFields =
             $this->getFilterFields(
                 $params
@@ -471,19 +462,18 @@ class PlmTable
                 $params
             );
 
-        /*
-         * Action column exists if at least
-         * one action is configured.
-         */
+        $deleteField =
+            $this->getDeleteField(
+                $params
+            );
+
         $hasActions =
             !empty($filterFields) ||
-            !empty($createFields);
+            !empty($createFields) ||
+            $deleteField !== null;
 
         /*
          * Common form.
-         *
-         * ENTER is deliberately blocked at form level.
-         * Buttons remain normal submit buttons.
          */
         if ($hasActions) {
 
@@ -534,9 +524,6 @@ class PlmTable
 
         $this->renderer->tablerow_open();
 
-        /*
-         * Normal columns first.
-         */
         foreach ($columns as $column) {
 
             $this->renderer->tableheader_open();
@@ -584,7 +571,7 @@ class PlmTable
         }
 
         /*
-         * Action column LAST.
+         * ACTION HEADER IS LAST.
          */
         if ($hasActions) {
 
@@ -638,9 +625,6 @@ class PlmTable
 
             $this->renderer->tablerow_open();
 
-            /*
-             * Normal data columns first.
-             */
             foreach ($columns as $column) {
 
                 $this->renderer->tablecell_open();
@@ -704,11 +688,52 @@ class PlmTable
             }
 
             /*
-             * Empty Action cell LAST.
+             * ACTION CELL IS LAST.
              */
             if ($hasActions) {
 
                 $this->renderer->tablecell_open();
+
+                /*
+                 * Delete button.
+                 */
+                if ($deleteField !== null) {
+
+                    $deleteValue =
+                        '';
+
+                    if (
+                        isset(
+                            $fieldIndexes[$deleteField]
+                        )
+                    ) {
+
+                        $deleteValue =
+                            $row[
+                                $fieldIndexes[$deleteField]
+                            ]->getDisplayValue();
+                    }
+
+                    if ($deleteValue !== '') {
+
+                        $this->renderer->doc .=
+                            '<button type="submit" '
+                            . 'name="plm_action" '
+                            . 'value="delete" '
+                            . 'class="plm_table_delete_button">'
+                            . hsc('Delete')
+                            . '</button>'
+
+                            . '<input type="hidden" '
+                            . 'name="plm_delete['
+                            . hsc($deleteField)
+                            . ']" '
+                            . 'value="'
+                            . hsc($deleteValue)
+                            . '">';
+                    }
+                }
+
                 $this->renderer->tablecell_close();
             }
 
@@ -725,10 +750,6 @@ class PlmTable
 
             $this->renderer->tablerow_open();
 
-            /*
-             * First cell belongs to the first
-             * normal column.
-             */
             $this->renderer->tablecell_open();
 
             $this->renderer->doc .=
@@ -738,9 +759,6 @@ class PlmTable
 
             $this->renderer->tablecell_close();
 
-            /*
-             * Remaining normal columns.
-             */
             for (
                 $i = 1;
                 $i < count($columns);
@@ -751,9 +769,6 @@ class PlmTable
                 $this->renderer->tablecell_close();
             }
 
-            /*
-             * Action cell LAST.
-             */
             if ($hasActions) {
 
                 $this->renderer->tablecell_open();
@@ -766,7 +781,6 @@ class PlmTable
         $this->renderer->table_close();
 
         if ($hasActions) {
-
             $this->renderer->doc .=
                 '</form>';
         }
@@ -797,15 +811,40 @@ class PlmTable
     }
 
     /**
+     * Get the configured DELETE field.
+     */
+    private function getDeleteField(
+        array $params
+    ): ?string {
+
+        if (
+            !isset($params['delete']) ||
+            !is_string($params['delete'])
+        ) {
+            return null;
+        }
+
+        $field =
+            trim(
+                $params['delete']
+            );
+
+        if ($field === '') {
+            return null;
+        }
+
+        if (!preg_match(
+            '/^[a-zA-Z0-9_.-]+$/',
+            $field
+        )) {
+            return null;
+        }
+
+        return $field;
+    }
+
+    /**
      * Normalize a configured field list.
-     *
-     * Supports both:
-     *
-     *     create: ipn description
-     *
-     * and:
-     *
-     *     create: ipn, description
      */
     private function getConfiguredFields(
         array $fields
@@ -815,10 +854,6 @@ class PlmTable
 
         foreach ($fields as $field) {
 
-            /*
-             * A parser token may still contain commas.
-             * Split them here.
-             */
             $parts =
                 preg_split(
                     '/\s*,\s*/',
@@ -857,9 +892,6 @@ class PlmTable
 
     /**
      * Render the CREATE row.
-     *
-     * The Action cell is deliberately rendered
-     * as the LAST column.
      */
     private function renderCreateRow(
         array $columns,
@@ -868,37 +900,21 @@ class PlmTable
 
         $this->renderer->tablerow_open();
 
-        /*
-         * Create inputs first.
-         */
         foreach ($columns as $column) {
 
             $this->renderer->tablecell_open();
 
-            /*
-             * Template columns do not receive
-             * create inputs.
-             */
             if (
                 str_starts_with(
                     $column,
                     '@'
+                ) ||
+                !in_array(
+                    $column,
+                    $createFields,
+                    true
                 )
             ) {
-
-                $this->renderer->tablecell_close();
-                continue;
-            }
-
-            /*
-             * Only explicitly configured create
-             * fields receive an input.
-             */
-            if (!in_array(
-                $column,
-                $createFields,
-                true
-            )) {
 
                 $this->renderer->tablecell_close();
                 continue;
@@ -914,13 +930,20 @@ class PlmTable
                 . hsc(
                     'Create ' . $column
                 )
+                . '" '
+                . 'onkeydown="'
+                . 'if(event.key===\'Enter\'){'
+                . 'event.preventDefault();'
+                . 'event.stopPropagation();'
+                . 'return false;'
+                . '}'
                 . '">';
 
             $this->renderer->tablecell_close();
         }
 
         /*
-         * Create button LAST.
+         * Empty action cell at the end.
          */
         $this->renderer->tablecell_open();
 
@@ -939,9 +962,6 @@ class PlmTable
 
     /**
      * Render the FILTER row.
-     *
-     * The Action cell is deliberately rendered
-     * as the LAST column.
      */
     private function renderFilterRow(
         string $name,
@@ -951,9 +971,6 @@ class PlmTable
 
         $this->renderer->tablerow_open();
 
-        /*
-         * Filter fields first.
-         */
         foreach ($columns as $column) {
 
             $this->renderer->tablecell_open();
@@ -992,13 +1009,20 @@ class PlmTable
                 . hsc(
                     'Filter ' . $column
                 )
+                . '" '
+                . 'onkeydown="'
+                . 'if(event.key===\'Enter\'){'
+                . 'event.preventDefault();'
+                . 'event.stopPropagation();'
+                . 'return false;'
+                . '}'
                 . '">';
 
             $this->renderer->tablecell_close();
         }
 
         /*
-         * Filter button LAST.
+         * Filter button at the end.
          */
         $this->renderer->tablecell_open();
 

@@ -25,9 +25,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
     ) {
         global $INPUT;
 
-        /*
-         * Only POST requests are relevant.
-         */
         if (
             strtoupper(
                 $INPUT->server->str(
@@ -42,21 +39,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
          * ---------------------------------------------------------
          * PLM TABLE ACTION
          * ---------------------------------------------------------
-         *
-         * Table actions:
-         *
-         *     plm_action=filter
-         *     plm_action=create
-         *
-         * Table filter fields:
-         *
-         *     plm_filter[field]
-         *
-         * Table create fields:
-         *
-         *     plm_create[field]
-         *
-         * The namespaces are deliberately different.
          */
 
         $tableAction =
@@ -104,15 +86,28 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             return;
         }
 
+        if ($tableAction === 'delete') {
+
+            try {
+
+                $this->processTableDelete();
+
+            } catch (Throwable $e) {
+
+                msg(
+                    'PLM table: ' .
+                    $e->getMessage(),
+                    -1
+                );
+            }
+
+            return;
+        }
+
         /*
          * ---------------------------------------------------------
          * PLM FORM
          * ---------------------------------------------------------
-         *
-         * Standalone forms continue to use:
-         *
-         *     plm_form_submit=1
-         *     plm_form[field]
          */
 
         if (
@@ -141,31 +136,16 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
      * -------------------------------------------------------------
      * TABLE FILTER
      * -------------------------------------------------------------
-     *
-     * Expected POST:
-     *
-     *     plm_action=filter
-     *     plm_table=<table name>
-     *     plm_filter[field]=<value>
      */
     private function processTableFilter(): void
     {
         global $INPUT, $ID;
 
-        /*
-         * Security token.
-         */
         if (!checkSecurityToken()) {
             throw new \RuntimeException(
                 'Invalid security token.'
             );
         }
-
-        /*
-         * ---------------------------------------------------------
-         * TABLE
-         * ---------------------------------------------------------
-         */
 
         $table =
             trim(
@@ -189,12 +169,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * ---------------------------------------------------------
-         * FILTERS
-         * ---------------------------------------------------------
-         */
-
         $filters =
             $INPUT->post->arr(
                 'plm_filter'
@@ -207,12 +181,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $state =
             new PlmState();
 
-        /*
-         * Store submitted filters.
-         *
-         * Empty values are stored deliberately so
-         * an existing filter can be cleared.
-         */
         foreach (
             $filters as $field => $value
         ) {
@@ -242,18 +210,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * ---------------------------------------------------------
-         * ENCODE STATE
-         * ---------------------------------------------------------
-         */
-
         $encoded =
             $state->encode();
 
-        /*
-         * Build clean URL for current page.
-         */
         $url =
             wl(
                 $ID,
@@ -290,16 +249,165 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
      * -------------------------------------------------------------
      * TABLE CREATE
      * -------------------------------------------------------------
+     */
+    private function processTableCreate(): void
+    {
+        global $INPUT, $ID;
+
+        if (!checkSecurityToken()) {
+            throw new \RuntimeException(
+                'Invalid security token.'
+            );
+        }
+
+        $table =
+            trim(
+                $INPUT->post->str(
+                    'plm_table'
+                )
+            );
+
+        if ($table === '') {
+            throw new \RuntimeException(
+                'No PLM table specified.'
+            );
+        }
+
+        if (!preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $table
+        )) {
+            throw new \RuntimeException(
+                'Invalid PLM table name.'
+            );
+        }
+
+        $schema =
+            trim(
+                $INPUT->post->str(
+                    'plm_schema'
+                )
+            );
+
+        if ($schema === '') {
+            throw new \RuntimeException(
+                'No PLM schema specified.'
+            );
+        }
+
+        $posted =
+            $INPUT->post->arr(
+                'plm_create'
+            );
+
+        if (!is_array($posted)) {
+            $posted = [];
+        }
+
+        $struct =
+            new PlmStruct();
+
+        $schemaObject =
+            new \dokuwiki\plugin\struct\meta\Schema(
+                $schema
+            );
+
+        if (!$schemaObject->isEditable()) {
+            throw new \RuntimeException(
+                'You are not allowed to edit this Struct schema.'
+            );
+        }
+
+        $access =
+            $struct->newGlobalAccess(
+                $schema
+            );
+
+        $data =
+            $struct->getDataArray(
+                $access
+            );
+
+        foreach (
+            $posted as $field => $value
+        ) {
+
+            if (!is_string($field)) {
+                continue;
+            }
+
+            if (!preg_match(
+                '/^[a-zA-Z0-9_.-]+$/',
+                $field
+            )) {
+                continue;
+            }
+
+            if (
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
+            $data[$field] =
+                (string) $value;
+        }
+
+        $struct->save(
+            $access,
+            $data
+        );
+
+        $data =
+            $struct->getDataArray(
+                $access
+            );
+
+        $redirects =
+            $INPUT->post->arr(
+                'plm_redirects'
+            );
+
+        if (!is_array($redirects)) {
+            $redirects = [];
+        }
+
+        $target =
+            trim(
+                $redirects['create'] ?? ''
+            );
+
+        if ($target === '') {
+            $target =
+                $ID;
+        }
+
+        $target =
+            $this->expandRedirectTarget(
+                $target,
+                $data
+            );
+
+        $this->sendTargetRedirect(
+            $target,
+            $ID
+        );
+    }
+
+    /**
+     * -------------------------------------------------------------
+     * TABLE DELETE
+     * -------------------------------------------------------------
      *
      * Expected POST:
      *
-     *     plm_action=create
-     *     plm_table=<table name>
+     *     plm_action=delete
+     *     plm_table=<table>
      *     plm_schema=<schema>
-     *     plm_create[field]=<value>
-     *     plm_redirects[create]=<target>
+     *     plm_delete[field]=<value>
      */
-    private function processTableCreate(): void
+    private function processTableDelete(): void
     {
         global $INPUT, $ID;
 
@@ -316,11 +424,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
          * ---------------------------------------------------------
          * TABLE
          * ---------------------------------------------------------
-         *
-         * The table name is not required for creating
-         * the Struct record itself, but it is required
-         * as part of the table POST contract.
          */
+
         $table =
             trim(
                 $INPUT->post->str(
@@ -364,34 +469,82 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
         /*
          * ---------------------------------------------------------
-         * CREATE DATA
+         * DELETE DATA
          * ---------------------------------------------------------
-         *
-         * IMPORTANT:
-         *
-         * Only plm_create is read here.
-         *
-         * plm_filter is completely independent.
          */
 
         $posted =
             $INPUT->post->arr(
-                'plm_create'
+                'plm_delete'
             );
 
         if (!is_array($posted)) {
-            $posted = [];
+            throw new \RuntimeException(
+                'No PLM delete field specified.'
+            );
         }
 
         /*
-         * Struct.
+         * Exactly one field is permitted.
          */
+        if (count($posted) !== 1) {
+            throw new \RuntimeException(
+                'PLM delete requires exactly one field.'
+            );
+        }
+
+        $deleteField =
+            array_key_first(
+                $posted
+            );
+
+        $deleteValue =
+            $posted[$deleteField];
+
+        if (!is_string($deleteField)) {
+            throw new \RuntimeException(
+                'Invalid PLM delete field.'
+            );
+        }
+
+        if (!preg_match(
+            '/^[a-zA-Z0-9_.-]+$/',
+            $deleteField
+        )) {
+            throw new \RuntimeException(
+                'Invalid PLM delete field.'
+            );
+        }
+
+        if (
+            is_array($deleteValue) ||
+            is_object($deleteValue)
+        ) {
+            throw new \RuntimeException(
+                'Invalid PLM delete value.'
+            );
+        }
+
+        $deleteValue =
+            trim(
+                (string) $deleteValue
+            );
+
+        if ($deleteValue === '') {
+            throw new \RuntimeException(
+                'PLM delete value must not be empty.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * STRUCT PERMISSION
+         * ---------------------------------------------------------
+         */
+
         $struct =
             new PlmStruct();
 
-        /*
-         * Check schema permissions.
-         */
         $schemaObject =
             new \dokuwiki\plugin\struct\meta\Schema(
                 $schema
@@ -405,64 +558,51 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
         /*
          * ---------------------------------------------------------
-         * NEW RECORD
+         * FIND RECORD
+         * ---------------------------------------------------------
+         *
+         * Escape characters which have special meaning
+         * in the Struct filter syntax.
+         */
+
+        $filterValue =
+            $this->escapeStructFilterValue(
+                $deleteValue
+            );
+
+        $filter =
+            $deleteField .
+            '=' .
+            $filterValue;
+
+        $record =
+            $struct->findOne(
+                $schema,
+                $filter
+            );
+
+        if ($record === null) {
+            throw new \RuntimeException(
+                'No Struct record found for the given delete value.'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * DELETE
          * ---------------------------------------------------------
          */
 
         $access =
-            $struct->newGlobalAccess(
-                $schema
+            $struct->getAccessForRecord(
+                $schema,
+                $record['pid'],
+                $record['rid']
             );
 
-        $data =
-            $struct->getDataArray(
-                $access
-            );
-
-        /*
-         * Copy submitted CREATE fields only.
-         */
-        foreach (
-            $posted as $field => $value
-        ) {
-
-            if (!is_string($field)) {
-                continue;
-            }
-
-            if (!preg_match(
-                '/^[a-zA-Z0-9_.-]+$/',
-                $field
-            )) {
-                continue;
-            }
-
-            if (
-                is_array($value) ||
-                is_object($value)
-            ) {
-                continue;
-            }
-
-            $data[$field] =
-                (string) $value;
-        }
-
-        /*
-         * Save.
-         */
-        $struct->save(
-            $access,
-            $data
+        $struct->delete(
+            $access
         );
-
-        /*
-         * Read final values back.
-         */
-        $data =
-            $struct->getDataArray(
-                $access
-            );
 
         /*
          * ---------------------------------------------------------
@@ -481,7 +621,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
         $target =
             trim(
-                $redirects['create'] ?? ''
+                $redirects['delete'] ?? ''
             );
 
         if ($target === '') {
@@ -492,12 +632,40 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $target =
             $this->expandRedirectTarget(
                 $target,
-                $data
+                $struct->getDataArray(
+                    $access
+                )
             );
 
         $this->sendTargetRedirect(
             $target,
             $ID
+        );
+    }
+
+    /**
+     * Escape a value used in a Struct filter.
+     */
+    private function escapeStructFilterValue(
+        string $value
+    ): string {
+
+        return str_replace(
+            [
+                '\\',
+                '*',
+                '~',
+                '[',
+                ']',
+            ],
+            [
+                '\\\\',
+                '\\*',
+                '\\~',
+                '\\[',
+                '\\]',
+            ],
+            $value
         );
     }
 
@@ -550,18 +718,12 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
     {
         global $INPUT, $ID;
 
-        /*
-         * Security token.
-         */
         if (!checkSecurityToken()) {
             throw new \RuntimeException(
                 'Invalid security token.'
             );
         }
 
-        /*
-         * Action.
-         */
         $action =
             strtolower(
                 trim(
@@ -586,9 +748,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * Schema.
-         */
         $schema =
             trim(
                 $INPUT->post->str(
@@ -602,16 +761,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * Filter.
-         *
-         * NOTE:
-         *
-         * Standalone PLM forms use plm_filter as
-         * a plain string here.
-         *
-         * Table filters use plm_filter[field].
-         */
         $filter =
             trim(
                 $INPUT->post->str(
@@ -622,12 +771,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         if ($filter === '') {
             $filter = null;
         }
-
-        /*
-         * ---------------------------------------------------------
-         * REDIRECT
-         * ---------------------------------------------------------
-         */
 
         if ($action === 'redirect') {
 
@@ -661,9 +804,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $struct =
             new PlmStruct();
 
-        /*
-         * Check schema permissions.
-         */
         $schemaObject =
             new \dokuwiki\plugin\struct\meta\Schema(
                 $schema
@@ -674,12 +814,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 'You are not allowed to edit this Struct schema.'
             );
         }
-
-        /*
-         * ---------------------------------------------------------
-         * CREATE
-         * ---------------------------------------------------------
-         */
 
         if ($action === 'create') {
 
@@ -739,12 +873,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             return;
         }
 
-        /*
-         * ---------------------------------------------------------
-         * UPDATE / DELETE
-         * ---------------------------------------------------------
-         */
-
         if ($filter === null) {
             throw new \RuntimeException(
                 ucfirst($action) .
@@ -771,12 +899,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $record['rid']
             );
 
-        /*
-         * ---------------------------------------------------------
-         * DELETE
-         * ---------------------------------------------------------
-         */
-
         if ($action === 'delete') {
 
             $data =
@@ -796,12 +918,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
             return;
         }
-
-        /*
-         * ---------------------------------------------------------
-         * UPDATE
-         * ---------------------------------------------------------
-         */
 
         $data =
             $struct->getDataArray(
