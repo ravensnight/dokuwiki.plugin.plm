@@ -14,26 +14,56 @@ class PlmState
 
     public function __construct()
     {
+        $this->loadState();
+    }
+
+    /**
+     * Load the encoded PLM state.
+     *
+     * This deliberately does not assume that the global
+     * DokuWiki INPUT object is always available.
+     */
+    private function loadState(): void
+    {
         global $INPUT;
 
+        $encoded = '';
+
         /*
-        * DokuWiki environment.
-        */
-        if ($INPUT !== null) {
+         * Normal DokuWiki request.
+         */
+        if (
+            isset($INPUT) &&
+            is_object($INPUT) &&
+            isset($INPUT->get)
+        ) {
+            try {
 
+                $encoded =
+                    $INPUT->get->str(
+                        self::PARAMETER
+                    );
+
+            } catch (Throwable $e) {
+
+                $encoded = '';
+            }
+        }
+
+        /*
+         * Fallback for environments where DokuWiki's
+         * Input object is not available.
+         */
+        if (
+            $encoded === '' &&
+            isset($_GET[self::PARAMETER])
+        ) {
             $encoded =
-                $INPUT->str(
-                    self::PARAMETER
-                );
-
-        } else {
-
-            /*
-            * Standalone / CLI test.
-            */
-            $encoded =
-                $_GET[self::PARAMETER]
-                ?? '';
+                is_string(
+                    $_GET[self::PARAMETER]
+                )
+                    ? $_GET[self::PARAMETER]
+                    : '';
         }
 
         if (
@@ -84,6 +114,7 @@ class PlmState
         string $name,
         string $field
     ): string {
+
         $value =
             $this->state['filter'][$name][$field]
             ?? '';
@@ -180,6 +211,72 @@ class PlmState
     }
 
     /**
+     * Get a normal URL parameter.
+     *
+     * This is used by PLM filter references such as:
+     *
+     *     _pk=&_pk
+     *
+     * The value is read from the current request and is
+     * deliberately kept separate from the encoded PLM state.
+     */
+    public function getRequestValue(
+        string $name
+    ): string {
+
+        if (
+            $name === '' ||
+            !preg_match(
+                '/^[a-zA-Z0-9_-]+$/',
+                $name
+            )
+        ) {
+            return '';
+        }
+
+        global $INPUT;
+
+        /*
+         * Normal DokuWiki request.
+         */
+        if (
+            isset($INPUT) &&
+            is_object($INPUT) &&
+            isset($INPUT->get)
+        ) {
+            try {
+
+                $value =
+                    $INPUT->get->str(
+                        $name
+                    );
+
+                if ($value !== null) {
+                    return (string) $value;
+                }
+
+            } catch (Throwable $e) {
+                /*
+                 * Fall through to $_GET.
+                 */
+            }
+        }
+
+        /*
+         * PHP fallback.
+         */
+        if (
+            isset($_GET[$name]) &&
+            !is_array($_GET[$name]) &&
+            !is_object($_GET[$name])
+        ) {
+            return (string) $_GET[$name];
+        }
+
+        return '';
+    }
+
+    /**
      * Encode the current state for the URL.
      *
      * Uses URL-safe Base64 without "=" padding.
@@ -228,10 +325,11 @@ class PlmState
             strlen($encoded) % 4;
 
         if ($padding !== 0) {
-            $encoded .= str_repeat(
-                '=',
-                4 - $padding
-            );
+            $encoded .=
+                str_repeat(
+                    '=',
+                    4 - $padding
+                );
         }
 
         $json =

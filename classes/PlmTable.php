@@ -276,6 +276,17 @@ class PlmTable
                 continue;
             }
 
+            /*
+             * "_pk" is a PLM technical field and
+             * does not exist in the Struct schema.
+             */
+            if (
+                $col ===
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
             $fields[] =
                 $col;
         }
@@ -287,8 +298,13 @@ class PlmTable
             as $field
         ) {
 
-            $fields[] =
-                $field;
+            if (
+                $field !==
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                $fields[] =
+                    $field;
+            }
         }
 
         foreach (
@@ -298,23 +314,40 @@ class PlmTable
             as $field
         ) {
 
-            $fields[] =
-                $field;
+            if (
+                $field !==
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                $fields[] =
+                    $field;
+            }
         }
 
         /*
          * Delete field must always be available
          * in every data row.
+         *
+         * "_pk" is technical and therefore does
+         * not need to be added to Struct columns.
          */
         if (
             isset($params['delete']) &&
             is_string($params['delete'])
         ) {
 
-            $fields[] =
-                $params['delete'];
+            if (
+                $params['delete'] !==
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+
+                $fields[] =
+                    $params['delete'];
+            }
         }
 
+        /*
+         * Fields referenced by templates.
+         */
         foreach (
             $params['template'] ?? []
             as $token
@@ -330,6 +363,17 @@ class PlmTable
                 $matches[1] ?? []
                 as $field
             ) {
+
+                /*
+                 * "_pk" is resolved from the
+                 * SearchConfig RID.
+                 */
+                if (
+                    $field ===
+                    PlmStruct::PRIMARY_KEY_FIELD
+                ) {
+                    continue;
+                }
 
                 $fields[] =
                     $field;
@@ -357,14 +401,24 @@ class PlmTable
     }
 
     /**
-     * Expand a named PLM template.
+     * Get the configured template definition.
+     *
+     * Syntax:
+     *
+     *     template: link_edit "Mein Link" [[ page | Open ]]
+     *
+     * Returns:
+     *
+     *     [
+     *         'name' => 'link_edit',
+     *         'label' => 'Mein Link',
+     *         'text' => '[[ page | Open ]]'
+     *     ]
      */
-    private function expandTemplate(
+    private function getTemplateDefinition(
         array $template,
-        string $name,
-        array $row,
-        array $fieldIndexes
-    ): ?string {
+        string $name
+    ): ?array {
 
         if (
             empty($template) ||
@@ -373,23 +427,82 @@ class PlmTable
             return null;
         }
 
-        $text =
-            implode(
-                ' ',
-                array_slice(
-                    $template,
-                    2
-                )
+        return [
+            'name' =>
+                $name,
+
+            'label' =>
+                $template[1] ??
+                $name,
+
+            'text' =>
+                implode(
+                    ' ',
+                    array_slice(
+                        $template,
+                        2
+                    )
+                ),
+        ];
+    }
+
+    /**
+     * Expand a named PLM template.
+     *
+     * "_pk" is resolved from the Struct RID.
+     */
+    private function expandTemplate(
+        array $template,
+        string $name,
+        array $row,
+        array $fieldIndexes,
+        ?int $rid = null
+    ): ?string {
+
+        $definition =
+            $this->getTemplateDefinition(
+                $template,
+                $name
             );
 
+        if ($definition === null) {
+            return null;
+        }
+
+        $text =
+            $definition['text'];
+
+        /*
+         * Expand Struct fields and the
+         * technical "_pk" field.
+         */
         $text =
             preg_replace_callback(
                 '/\$([a-zA-Z0-9_.-]+)/',
                 function ($match)
-                    use ($row, $fieldIndexes) {
+                    use (
+                        $row,
+                        $fieldIndexes,
+                        $rid
+                    ) {
 
                     $field =
                         $match[1];
+
+                    /*
+                     * Technical PLM primary key.
+                     */
+                    if (
+                        $field ===
+                        PlmStruct::PRIMARY_KEY_FIELD
+                    ) {
+
+                        if ($rid === null) {
+                            return $match[0];
+                        }
+
+                        return (string) $rid;
+                    }
 
                     if (
                         !isset(
@@ -406,6 +519,9 @@ class PlmTable
                 $text
             );
 
+        /*
+         * Expand URI parameters.
+         */
         $text =
             preg_replace_callback(
                 '/&([a-zA-Z0-9_-]+)/',
@@ -487,25 +603,25 @@ class PlmTable
                 . 'event.stopPropagation();'
                 . 'return false;'
                 . '}'
-                . '">'
+                . '">' .
 
-                . '<input type="hidden" '
+                '<input type="hidden" '
                 . 'name="plm_form_submit" '
-                . 'value="1">'
+                . 'value="1">' .
 
-                . '<input type="hidden" '
+                '<input type="hidden" '
                 . 'name="plm_table" '
                 . 'value="'
                 . hsc($name)
-                . '">'
+                . '">' .
 
-                . '<input type="hidden" '
+                '<input type="hidden" '
                 . 'name="plm_schema" '
                 . 'value="'
                 . hsc($schema)
-                . '">'
+                . '">' .
 
-                . '<input type="hidden" '
+                '<input type="hidden" '
                 . 'name="sectok" '
                 . 'value="'
                 . hsc(
@@ -541,23 +657,29 @@ class PlmTable
                         1
                     );
 
-                if (
-                    isset($params['template']) &&
-                    ($params['template'][0] ?? null)
-                        === $templateName
-                ) {
-
-                    $this->renderer->cdata(
-                        $params['template'][1]
-                            ?? $templateName
-                    );
-
-                } else {
-
-                    $this->renderer->cdata(
+                /*
+                 * For template columns the second
+                 * template token is the column label.
+                 */
+                $definition =
+                    $this->getTemplateDefinition(
+                        $params['template'] ?? [],
                         $templateName
                     );
-                }
+
+                $this->renderer->cdata(
+                    $definition['label']
+                        ?? $templateName
+                );
+
+            } elseif (
+                $column ===
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+
+                $this->renderer->cdata(
+                    PlmStruct::PRIMARY_KEY_FIELD
+                );
 
             } else {
 
@@ -621,7 +743,15 @@ class PlmTable
          * -----------------------------------------------------
          */
 
-        foreach ($rows as $row) {
+        $rids =
+            $search->getRids();
+
+        foreach ($rows as $rowIndex => $row) {
+
+            $rid =
+                (int) (
+                    $rids[$rowIndex] ?? 0
+                );
 
             $this->renderer->tablerow_open();
 
@@ -647,7 +777,8 @@ class PlmTable
                             $params['template'] ?? [],
                             $templateName,
                             $row,
-                            $fieldIndexes
+                            $fieldIndexes,
+                            $rid
                         );
 
                     if ($expanded !== null) {
@@ -669,6 +800,18 @@ class PlmTable
                         $this->renderer->doc .=
                             $html;
                     }
+
+                } elseif (
+                    $column ===
+                    PlmStruct::PRIMARY_KEY_FIELD
+                ) {
+
+                    /*
+                     * Technical Struct RID.
+                     */
+                    $this->renderer->cdata(
+                        (string) $rid
+                    );
 
                 } elseif (
                     isset(
@@ -703,6 +846,14 @@ class PlmTable
                         '';
 
                     if (
+                        $deleteField ===
+                        PlmStruct::PRIMARY_KEY_FIELD
+                    ) {
+
+                        $deleteValue =
+                            (string) $rid;
+
+                    } elseif (
                         isset(
                             $fieldIndexes[$deleteField]
                         )
@@ -833,10 +984,14 @@ class PlmTable
             return null;
         }
 
-        if (!preg_match(
-            '/^[a-zA-Z0-9_.-]+$/',
-            $field
-        )) {
+        if (
+            $field !==
+            PlmStruct::PRIMARY_KEY_FIELD &&
+            !preg_match(
+                '/^[a-zA-Z0-9_.-]+$/',
+                $field
+            )
+        ) {
             return null;
         }
 
@@ -871,10 +1026,14 @@ class PlmTable
                     continue;
                 }
 
-                if (!preg_match(
-                    '/^[a-zA-Z0-9_.-]+$/',
-                    $part
-                )) {
+                if (
+                    $part !==
+                    PlmStruct::PRIMARY_KEY_FIELD &&
+                    !preg_match(
+                        '/^[a-zA-Z0-9_.-]+$/',
+                        $part
+                    )
+                ) {
                     continue;
                 }
 
@@ -909,6 +1068,8 @@ class PlmTable
                     $column,
                     '@'
                 ) ||
+                $column ===
+                    PlmStruct::PRIMARY_KEY_FIELD ||
                 !in_array(
                     $column,
                     $createFields,
@@ -980,6 +1141,8 @@ class PlmTable
                     $column,
                     '@'
                 ) ||
+                $column ===
+                    PlmStruct::PRIMARY_KEY_FIELD ||
                 !in_array(
                     $column,
                     $filterFields,

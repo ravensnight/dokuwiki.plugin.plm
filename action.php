@@ -350,6 +350,13 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
+            if (
+                $field ===
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
             $data[$field] =
                 (string) $value;
         }
@@ -399,32 +406,16 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
      * -------------------------------------------------------------
      * TABLE DELETE
      * -------------------------------------------------------------
-     *
-     * Expected POST:
-     *
-     *     plm_action=delete
-     *     plm_table=<table>
-     *     plm_schema=<schema>
-     *     plm_delete[field]=<value>
      */
     private function processTableDelete(): void
     {
         global $INPUT, $ID;
 
-        /*
-         * Security token.
-         */
         if (!checkSecurityToken()) {
             throw new \RuntimeException(
                 'Invalid security token.'
             );
         }
-
-        /*
-         * ---------------------------------------------------------
-         * TABLE
-         * ---------------------------------------------------------
-         */
 
         $table =
             trim(
@@ -448,12 +439,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * ---------------------------------------------------------
-         * SCHEMA
-         * ---------------------------------------------------------
-         */
-
         $schema =
             trim(
                 $INPUT->post->str(
@@ -467,12 +452,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * ---------------------------------------------------------
-         * DELETE DATA
-         * ---------------------------------------------------------
-         */
-
         $posted =
             $INPUT->post->arr(
                 'plm_delete'
@@ -484,9 +463,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * Exactly one field is permitted.
-         */
         if (count($posted) !== 1) {
             throw new \RuntimeException(
                 'PLM delete requires exactly one field.'
@@ -507,10 +483,14 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        if (!preg_match(
-            '/^[a-zA-Z0-9_.-]+$/',
-            $deleteField
-        )) {
+        if (
+            $deleteField !==
+            PlmStruct::PRIMARY_KEY_FIELD &&
+            !preg_match(
+                '/^[a-zA-Z0-9_.-]+$/',
+                $deleteField
+            )
+        ) {
             throw new \RuntimeException(
                 'Invalid PLM delete field.'
             );
@@ -536,12 +516,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * ---------------------------------------------------------
-         * STRUCT PERMISSION
-         * ---------------------------------------------------------
-         */
-
         $struct =
             new PlmStruct();
 
@@ -555,15 +529,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 'You are not allowed to edit this Struct schema.'
             );
         }
-
-        /*
-         * ---------------------------------------------------------
-         * FIND RECORD
-         * ---------------------------------------------------------
-         *
-         * Escape characters which have special meaning
-         * in the Struct filter syntax.
-         */
 
         $filterValue =
             $this->escapeStructFilterValue(
@@ -587,12 +552,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * ---------------------------------------------------------
-         * DELETE
-         * ---------------------------------------------------------
-         */
-
         $access =
             $struct->getAccessForRecord(
                 $schema,
@@ -600,15 +559,19 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $record['rid']
             );
 
+        $data =
+            $struct->getDataArray(
+                $access
+            );
+
+        $data[
+            PlmStruct::PRIMARY_KEY_FIELD
+        ] =
+            $record['rid'];
+
         $struct->delete(
             $access
         );
-
-        /*
-         * ---------------------------------------------------------
-         * REDIRECT
-         * ---------------------------------------------------------
-         */
 
         $redirects =
             $INPUT->post->arr(
@@ -632,9 +595,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $target =
             $this->expandRedirectTarget(
                 $target,
-                $struct->getDataArray(
-                    $access
-                )
+                $data
             );
 
         $this->sendTargetRedirect(
@@ -761,6 +722,20 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
+        /*
+         * This is the IMPORTANT part:
+         *
+         * PlmForm has already expanded:
+         *
+         *     _pk=&_pk
+         *
+         * into:
+         *
+         *     _pk=123
+         *
+         * Therefore the POST handler does not need to know
+         * anything about URL references.
+         */
         $filter =
             trim(
                 $INPUT->post->str(
@@ -771,6 +746,12 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         if ($filter === '') {
             $filter = null;
         }
+
+        /*
+         * ---------------------------------------------------------
+         * REDIRECT
+         * ---------------------------------------------------------
+         */
 
         if ($action === 'redirect') {
 
@@ -815,6 +796,12 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
+        /*
+         * ---------------------------------------------------------
+         * CREATE
+         * ---------------------------------------------------------
+         */
+
         if ($action === 'create') {
 
             if ($filter !== null) {
@@ -850,6 +837,10 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                     continue;
                 }
 
+                if ($field === '_pk') {
+                    continue;
+                }
+
                 $data[$field] =
                     $value;
             }
@@ -873,6 +864,12 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             return;
         }
 
+        /*
+         * ---------------------------------------------------------
+         * EXISTING RECORD
+         * ---------------------------------------------------------
+         */
+
         if ($filter === null) {
             throw new \RuntimeException(
                 ucfirst($action) .
@@ -880,6 +877,14 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
+        /*
+         * All existing-record actions use the central
+         * PlmStruct lookup.
+         *
+         * This includes:
+         *
+         *     _pk=123
+         */
         $record =
             $struct->findOne(
                 $schema,
@@ -899,12 +904,23 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $record['rid']
             );
 
+        /*
+         * ---------------------------------------------------------
+         * DELETE
+         * ---------------------------------------------------------
+         */
+
         if ($action === 'delete') {
 
             $data =
                 $struct->getDataArray(
                     $access
                 );
+
+            $data[
+                PlmStruct::PRIMARY_KEY_FIELD
+            ] =
+                $record['rid'];
 
             $struct->delete(
                 $access
@@ -918,6 +934,12 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
             return;
         }
+
+        /*
+         * ---------------------------------------------------------
+         * UPDATE
+         * ---------------------------------------------------------
+         */
 
         $data =
             $struct->getDataArray(
@@ -941,6 +963,16 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
+            /*
+             * _pk is technical/read-only.
+             */
+            if (
+                $field ===
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
             $data[$field] =
                 $value;
         }
@@ -954,6 +986,15 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $struct->getDataArray(
                 $access
             );
+
+        /*
+         * Make the technical RID available to
+         * redirect placeholders.
+         */
+        $data[
+            PlmStruct::PRIMARY_KEY_FIELD
+        ] =
+            $record['rid'];
 
         $this->redirect(
             $action,

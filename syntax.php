@@ -92,9 +92,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         $rendererId =
             spl_object_id($renderer);
 
-        /*
-         * One shared state per page render.
-         */
         if (!isset($states[$rendererId])) {
 
             $states[$rendererId] =
@@ -109,12 +106,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             ];
         }
 
-        /*
-         * ---------------------------------------------------------
-         * ENTER
-         * ---------------------------------------------------------
-         */
-
         if (isset($data['enter'])) {
 
             $blocks[$rendererId] = [
@@ -124,12 +115,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
             return true;
         }
-
-        /*
-         * ---------------------------------------------------------
-         * EXIT
-         * ---------------------------------------------------------
-         */
 
         if (isset($data['exit'])) {
 
@@ -150,12 +135,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                 $state
             );
         }
-
-        /*
-         * ---------------------------------------------------------
-         * CONTENT
-         * ---------------------------------------------------------
-         */
 
         if (isset($data['content'])) {
 
@@ -216,9 +195,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         return false;
     }
 
-    /**
-     * Render a complete PLM block.
-     */
     private function renderBlock(
         Doku_Renderer $renderer,
         string $header,
@@ -253,19 +229,27 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             $schema =
                 $definition['schema'];
 
+            /*
+             * Resolve URI parameters before handing
+             * the filter to any PLM component.
+             *
+             * Example:
+             *
+             *     _pk=&_pk
+             *
+             * becomes:
+             *
+             *     _pk=123
+             */
             $filter =
-                $definition['filter'];
+                $this->expandUriParameters(
+                    $definition['filter']
+                );
 
             $errortext =
                 $definition['errortext'];
 
             switch ($type) {
-
-                /*
-                 * -------------------------------------------------
-                 * TABLE
-                 * -------------------------------------------------
-                 */
 
                 case 'table':
 
@@ -293,12 +277,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                     return true;
 
-                /*
-                 * -------------------------------------------------
-                 * FORM
-                 * -------------------------------------------------
-                 */
-
                 case 'form':
 
                     $struct =
@@ -325,12 +303,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                     return true;
 
-                /*
-                 * -------------------------------------------------
-                 * SELECT
-                 * -------------------------------------------------
-                 */
-
                 case 'select':
 
                     $struct =
@@ -352,12 +324,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                     );
 
                     return true;
-
-                /*
-                 * -------------------------------------------------
-                 * UNKNOWN
-                 * -------------------------------------------------
-                 */
 
                 default:
 
@@ -383,35 +349,84 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
     }
 
     /**
-     * Parse PLM header.
+     * Resolve references to current URI parameters.
      *
-     * Supported syntax:
+     * Example:
      *
-     *     select > id | plm_companies[name=Any]
+     *     _pk=&_pk
      *
-     *     select > id | plm_companies[name=Any]
-     *     "No company found"
+     * with:
      *
-     *     select > id | plm_companies
-     *     "No company selected"
+     *     ?_pk=123
      *
-     *     select > id | plm_companies[name=Any] "No company found"
+     * becomes:
      *
-     * The components are:
-     *
-     *     type
-     *     >
-     *     name
-     *     |
-     *     schema
-     *     [filter]
-     *     "errortext"
-     *
-     * Filter and errortext are optional.
-     *
-     * If no errortext is supplied, the special
-     * default value "not found!" is used.
+     *     _pk=123
      */
+    private function expandUriParameters(
+        string $filter
+    ): string {
+
+        if ($filter === '') {
+            return '';
+        }
+
+        global $INPUT;
+
+        return
+            preg_replace_callback(
+                '/&([a-zA-Z0-9_-]+)/',
+                function ($match) use ($INPUT) {
+
+                    $parameter =
+                        $match[1];
+
+                    if (
+                        !isset($INPUT) ||
+                        $INPUT === null ||
+                        !isset($INPUT->get)
+                    ) {
+                        return '';
+                    }
+
+                    $value =
+                        $INPUT->get->str(
+                            $parameter
+                        );
+
+                    if (
+                        $value === null
+                    ) {
+                        return '';
+                    }
+
+                    /*
+                     * Escape characters which have
+                     * special meaning in Struct filters.
+                     */
+                    return
+                        str_replace(
+                            [
+                                '\\',
+                                '*',
+                                '~',
+                                '[',
+                                ']',
+                            ],
+                            [
+                                '\\\\',
+                                '\\*',
+                                '\\~',
+                                '\\[',
+                                '\\]',
+                            ],
+                            (string) $value
+                        );
+                },
+                $filter
+            );
+    }
+
     private function parseHeader(
         string $header
     ): ?array {
@@ -421,19 +436,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                 $header
             );
 
-        /*
-         * Basic structure:
-         *
-         *     type > name | schema
-         *
-         * followed optionally by:
-         *
-         *     [filter]
-         *
-         * and/or:
-         *
-         *     "errortext"
-         */
         if (!preg_match(
             '/^'
             . '([a-zA-Z0-9_-]+)'
@@ -451,20 +453,11 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             return null;
         }
 
-        /*
-         * Filter.
-         */
         $filter =
             isset($match[4])
                 ? trim($match[4])
                 : '';
 
-        /*
-         * Error text.
-         *
-         * Decode escaped characters inside
-         * the quoted string.
-         */
         if (
             isset($match[5])
         ) {
@@ -504,9 +497,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         ];
     }
 
-    /**
-     * Display a technical PLM error.
-     */
     private function error(
         Doku_Renderer $renderer,
         string $message

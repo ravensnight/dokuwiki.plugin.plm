@@ -15,7 +15,7 @@ class PlmForm
     private $state;
 
     /**
-     * True when a PLM state reference used by the
+     * True when a PLM state/request reference used by the
      * filter exists but contains no value.
      */
     private bool $filterStateMissing = false;
@@ -61,15 +61,19 @@ class PlmForm
             );
 
         /*
-         * Expand references to PLM state.
+         * Expand references in the filter.
          *
-         * Example:
+         * Supported:
          *
-         *     name=$tablecompanies.name
+         *     $table.field
          *
-         * becomes:
+         * from PlmState
          *
-         *     name=Any
+         * and:
+         *
+         *     &_pk
+         *
+         * from normal URL parameters.
          */
         $filter =
             $this->expandFilter(
@@ -77,11 +81,8 @@ class PlmForm
             );
 
         /*
-         * A missing state value means that the requested
+         * A missing reference value means that the requested
          * record cannot be found.
-         *
-         * This is different from a completely empty filter,
-         * which means that a new global record should be edited.
          */
         if ($this->filterStateMissing) {
 
@@ -113,21 +114,50 @@ class PlmForm
     }
 
     /**
-     * Expand references to values stored in PlmState.
+     * Expand PLM filter references.
+     *
+     * Supported forms:
+     *
+     *     $table.field
+     *
+     * and:
+     *
+     *     &parameter
+     *
+     * Example:
+     *
+     *     _pk=&_pk
+     *
+     * with:
+     *
+     *     ?_pk=123
+     *
+     * becomes:
+     *
+     *     _pk=123
      */
     private function expandFilter(
         string $filter
     ): ?string {
 
-        /*
-         * Reset the state for every render.
-         */
         $this->filterStateMissing = false;
+
+        $filter =
+            trim(
+                $filter
+            );
 
         if ($filter === '') {
             return null;
         }
 
+        /*
+         * ---------------------------------------------------------
+         * PLM STATE REFERENCES
+         * ---------------------------------------------------------
+         *
+         *     $table.field
+         */
         $filter =
             preg_replace_callback(
                 '/\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_.-]+)/',
@@ -151,7 +181,51 @@ class PlmForm
                             true;
                     }
 
-                    return $value;
+                    return $this->escapeFilterValue(
+                        $value
+                    );
+                },
+                $filter
+            );
+
+        if ($this->filterStateMissing) {
+            return null;
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * URL PARAMETER REFERENCES
+         * ---------------------------------------------------------
+         *
+         *     &_pk
+         *
+         * The ampersand is PLM syntax and is removed during
+         * expansion.
+         *
+         * We deliberately only accept simple URL parameter names.
+         */
+        $filter =
+            preg_replace_callback(
+                '/&([a-zA-Z0-9_-]+)/',
+                function ($match) {
+
+                    $parameter =
+                        $match[1];
+
+                    $value =
+                        $this->state->getRequestValue(
+                            $parameter
+                        );
+
+                    if ($value === '') {
+
+                        $this->filterStateMissing =
+                            true;
+                    }
+
+                    return $this->escapeFilterValue(
+                        $value
+                    );
                 },
                 $filter
             );
@@ -161,6 +235,32 @@ class PlmForm
         }
 
         return $filter;
+    }
+
+    /**
+     * Escape a value inserted into a Struct filter.
+     */
+    private function escapeFilterValue(
+        string $value
+    ): string {
+
+        return str_replace(
+            [
+                '\\',
+                '*',
+                '~',
+                '[',
+                ']',
+            ],
+            [
+                '\\\\',
+                '\\*',
+                '\\~',
+                '\\[',
+                '\\]',
+            ],
+            $value
+        );
     }
 
     /**
@@ -185,7 +285,7 @@ class PlmForm
                 continue;
             }
 
-            $name =
+            $fieldName =
                 trim(
                     $definition[0]
                 );
@@ -196,7 +296,7 @@ class PlmForm
                     trim($definition[1])
                 ) === 'readonly';
 
-            $fields[$name] = [
+            $fields[$fieldName] = [
                 'readonly' => $readonly,
             ];
         }
@@ -297,11 +397,6 @@ class PlmForm
 
                 if ($record === null) {
 
-                    /*
-                     * No matching record is a normal
-                     * application state, not a technical
-                     * error.
-                     */
                     $this->renderEmpty(
                         $errortext
                     );
@@ -344,9 +439,6 @@ class PlmForm
 
         } catch (Throwable $e) {
 
-            /*
-             * Technical errors remain real errors.
-             */
             $this->error(
                 'PLM form: ' .
                 $e->getMessage()
@@ -356,9 +448,6 @@ class PlmForm
 
     /**
      * Render the normal "nothing found" message.
-     *
-     * The text is parsed as DokuWiki content and
-     * therefore supports normal DokuWiki markup.
      */
     private function renderEmpty(
         string $text
@@ -417,16 +506,10 @@ class PlmForm
             hsc($formAction) .
             '">';
 
-        /*
-         * Form submission marker.
-         */
         $html .=
             '<input type="hidden" ' .
             'name="plm_form_submit" value="1">';
 
-        /*
-         * Schema.
-         */
         $html .=
             '<input type="hidden" ' .
             'name="plm_schema" value="' .
@@ -434,7 +517,17 @@ class PlmForm
             '">';
 
         /*
-         * Expanded filter.
+         * Store the already expanded filter.
+         *
+         * Important:
+         *
+         *     _pk=&_pk
+         *
+         * has become:
+         *
+         *     _pk=123
+         *
+         * before it reaches the POST handler.
          */
         if ($filter !== null) {
 
@@ -611,9 +704,6 @@ class PlmForm
                 '</div>';
         }
 
-        /*
-         * Redirect definitions.
-         */
         $html .=
             $this->renderRedirectInputs(
                 $actions

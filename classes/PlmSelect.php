@@ -2,48 +2,15 @@
 
 class PlmSelect
 {
-    /** @var Doku_Renderer */
     private $renderer;
 
-    /** @var PlmStruct */
     private $struct;
 
-    /** @var PlmState */
     private $state;
 
-    /*
-     * Central definition of a PLM field name.
-     *
-     * Important:
-     *
-     *     $name__
-     *
-     * must be parsed as:
-     *
-     *     $name
-     *     __
-     *
-     * and NOT as the field "$name__".
-     *
-     * A field may contain separators such as:
-     *
-     *     company_name
-     *     company-name
-     *     company.name
-     *
-     * but separators must not appear at the beginning
-     * or end of the field name.
-     */
     private const FIELD_PATTERN =
         '[a-zA-Z0-9]+(?:[_.-][a-zA-Z0-9]+)*';
 
-    /**
-     * Pattern for PLM state references.
-     *
-     * Example:
-     *
-     *     $tablecompanies.name
-     */
     private const STATE_PATTERN =
         '[a-zA-Z0-9_-]+\.'
         . '[a-zA-Z0-9]+(?:[_.-][a-zA-Z0-9]+)*';
@@ -67,43 +34,28 @@ class PlmSelect
     ): void {
 
         if ($schema === '') {
+
             $this->error(
                 'PLM select: parameter "schema" is required'
             );
+
             return;
         }
 
         if ($filter === '') {
+
             $this->error(
                 'PLM select: parameter "filter" is required'
             );
+
             return;
         }
 
-        /*
-         * Expand references to PLM table filters.
-         *
-         * Example:
-         *
-         *     name=*$tablecompanies.name*
-         *
-         * becomes:
-         *
-         *     name=*Anycubic*
-         */
         $filter =
             $this->expandFilter(
                 $filter
             );
 
-        /*
-         * If a referenced state value does not exist,
-         * no record can be selected.
-         *
-         * The select still renders its content.
-         * Only field placeholders are replaced
-         * by the error text.
-         */
         if ($filter === null) {
 
             $text =
@@ -123,17 +75,62 @@ class PlmSelect
 
         try {
 
+            /*
+             * findOne() is deliberately used here.
+             *
+             * This is important because findOne()
+             * centrally handles the special _pk field.
+             */
+            $record =
+                $this->struct->findOne(
+                    $schema,
+                    $filter
+                );
+
+            if ($record === null) {
+
+                $text =
+                    $this->expandContent(
+                        $content,
+                        null,
+                        [],
+                        $errortext
+                    );
+
+                $this->renderContent(
+                    $text
+                );
+
+                return;
+            }
+
+            $row =
+                $record['row'];
+
+            /*
+             * We need the column indexes from the same
+             * Struct search used to obtain the row.
+             *
+             * Search all requested fields again.
+             */
             $fields =
                 $this->getStructFields(
                     $filter,
                     $content
                 );
 
+            if (empty($fields)) {
+
+                $fields =
+                    array_keys(
+                        $row
+                    );
+            }
+
             $result =
                 $this->struct->search(
                     $schema,
-                    $fields,
-                    $filter
+                    $fields
                 );
 
             $search =
@@ -142,27 +139,59 @@ class PlmSelect
             $rows =
                 $result['rows'];
 
-        } catch (Throwable $e) {
+            $fieldIndexes = [];
 
-            $this->error(
-                'PLM select: ' .
-                $e->getMessage()
-            );
+            foreach (
+                $search->getColumns()
+                as $index => $column
+            ) {
 
-            return;
-        }
+                $fieldIndexes[
+                    $column->getLabel()
+                ] =
+                    $index;
+            }
 
-        /*
-         * PLM select deliberately uses only the
-         * first matching record.
-         */
-        if (empty($rows)) {
+            /*
+             * Locate the same RID in the second result.
+             */
+            $rids =
+                $search->getRids();
+
+            $matchedRow = null;
+
+            foreach (
+                $rows as $index => $candidate
+            ) {
+
+                if (
+                    (int) (
+                        $rids[$index] ?? 0
+                    ) ===
+                    (int) $record['rid']
+                ) {
+
+                    $matchedRow =
+                        $candidate;
+
+                    break;
+                }
+            }
+
+            if ($matchedRow === null) {
+
+                /*
+                 * Fallback: the original row.
+                 */
+                $matchedRow =
+                    $row;
+            }
 
             $text =
                 $this->expandContent(
                     $content,
-                    null,
-                    [],
+                    $matchedRow,
+                    $fieldIndexes,
                     $errortext
                 );
 
@@ -170,60 +199,15 @@ class PlmSelect
                 $text
             );
 
-            return;
-        }
+        } catch (Throwable $e) {
 
-        /*
-         * Use only the first matching record.
-         */
-        $row =
-            $rows[0];
-
-        /*
-         * Build field indexes.
-         */
-        $fieldIndexes = [];
-
-        foreach (
-            $search->getColumns()
-            as $index => $column
-        ) {
-
-            $field =
-                $column->getLabel();
-
-            $fieldIndexes[$field] =
-                $index;
-        }
-
-        /*
-         * Render the content once for the first
-         * matching record.
-         */
-        $text =
-            $this->expandContent(
-                $content,
-                $row,
-                $fieldIndexes,
-                $errortext
+            $this->error(
+                'PLM select: ' .
+                $e->getMessage()
             );
-
-        $this->renderContent(
-            $text
-        );
+        }
     }
 
-    /**
-     * Expand references to values stored in PlmState.
-     *
-     * Example:
-     *
-     *     name=*$tablecompanies.name*
-     *
-     * becomes:
-     *
-     *     name=*Anycubic*
-     */
     private function expandFilter(
         string $filter
     ): ?string {
@@ -236,9 +220,9 @@ class PlmSelect
 
         $filter =
             preg_replace_callback(
-                '/\$('
-                . self::STATE_PATTERN
-                . ')/',
+                '/\$(' .
+                self::STATE_PATTERN .
+                ')/',
                 function ($match)
                     use (&$hasEmptyParameter) {
 
@@ -280,10 +264,6 @@ class PlmSelect
         return $filter;
     }
 
-    /**
-     * Determine Struct fields referenced by the filter
-     * or by the select content.
-     */
     private function getStructFields(
         string $filter,
         string $content
@@ -291,15 +271,12 @@ class PlmSelect
 
         $fields = [];
 
-        /*
-         * Fields used on the left side of the filter.
-         */
         preg_match_all(
             '/(?:^|\(|\s|AND\s+|OR\s+)'
             . '('
             . self::FIELD_PATTERN
             . ')'
-            . '\s*(?:=|!=|~|!~|=\*|>\=|<\=|>|<)/i',
+            . '\s*(?:=|!=|~|!~|=\*|>=|<=|>|<)/i',
             $filter,
             $matches
         );
@@ -309,25 +286,21 @@ class PlmSelect
             as $field
         ) {
 
+            if (
+                $field ===
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
             $fields[] =
                 $field;
         }
 
-        /*
-         * Fields referenced in the select content.
-         *
-         * Example:
-         *
-         *     Change: $name
-         *
-         * requires:
-         *
-         *     name
-         */
         preg_match_all(
-            '/\$('
-            . self::FIELD_PATTERN
-            . ')/',
+            '/\$(' .
+            self::FIELD_PATTERN .
+            ')/',
             $content,
             $matches
         );
@@ -337,10 +310,6 @@ class PlmSelect
             as $field
         ) {
 
-            /*
-             * A select content placeholder is a Struct
-             * field, not a PLM state reference.
-             */
             if (
                 strpos(
                     $field,
@@ -360,27 +329,6 @@ class PlmSelect
         );
     }
 
-    /**
-     * Expand $field references in the select body.
-     *
-     * If a matching record exists, the placeholder
-     * is replaced by the Struct field value.
-     *
-     * If no matching record exists, only the
-     * placeholder itself is replaced by $errortext.
-     *
-     * Example:
-     *
-     *     __Change $name__
-     *
-     * becomes:
-     *
-     *     __Change Anycubic__
-     *
-     * or, if no record exists:
-     *
-     *     __Change Element not found__
-     */
     private function expandContent(
         string $content,
         ?array $row,
@@ -390,9 +338,9 @@ class PlmSelect
 
         return
             preg_replace_callback(
-                '/\$('
-                . self::FIELD_PATTERN
-                . ')/',
+                '/\$(' .
+                self::FIELD_PATTERN .
+                ')/',
                 function ($match)
                     use (
                         $row,
@@ -403,27 +351,15 @@ class PlmSelect
                     $field =
                         $match[1];
 
-                    /*
-                     * No matching record.
-                     *
-                     * Replace only the placeholder.
-                     */
                     if ($row === null) {
-
                         return $errortext;
                     }
 
-                    /*
-                     * Field was not loaded.
-                     *
-                     * Treat it like a missing value.
-                     */
                     if (
                         !isset(
                             $fieldIndexes[$field]
                         )
                     ) {
-
                         return $errortext;
                     }
 
@@ -432,18 +368,10 @@ class PlmSelect
                             $fieldIndexes[$field]
                         ]->getDisplayValue();
 
-                    /*
-                     * Empty Struct value.
-                     *
-                     * The record exists, but the field
-                     * itself has no value. In this case
-                     * use the error text as well.
-                     */
                     if (
                         $value === null ||
                         $value === ''
                     ) {
-
                         return $errortext;
                     }
 
@@ -453,19 +381,11 @@ class PlmSelect
             );
     }
 
-    /**
-     * Render expanded DokuWiki content.
-     */
     private function renderContent(
         string $text
     ): void {
 
-        /*
-         * Do not render completely empty content.
-         */
-        if (
-            trim($text) === ''
-        ) {
+        if (trim($text) === '') {
             return;
         }
 

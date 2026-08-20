@@ -40,14 +40,23 @@ class PlmParser
              * action: update "Speichern" :parts:part?ipn=$ipn
              * action: create "Create" :parts:part?ipn=$ipn
              *
-             * delete is deliberately NOT treated as a line based
-             * list here. It is normalized below because exactly
-             * one field is allowed.
+             * template is parsed separately below.
              */
             if (
                 $name === 'field' ||
                 $name === 'action'
             ) {
+                $params[$name][] =
+                    $this->tokenize($value);
+
+                continue;
+            }
+
+            /*
+             * Templates are kept as complete token arrays
+             * until they can be normalized below.
+             */
+            if ($name === 'template') {
                 $params[$name][] =
                     $this->tokenize($value);
 
@@ -65,7 +74,8 @@ class PlmParser
 
             if (
                 $name === 'field' ||
-                $name === 'action'
+                $name === 'action' ||
+                $name === 'template'
             ) {
                 continue;
             }
@@ -79,6 +89,143 @@ class PlmParser
             }
 
             $params[$name] = $flattened;
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * TEMPLATES
+         * ---------------------------------------------------------
+         *
+         * Example:
+         *
+         * template: link_edit "Mein Link" [[ :intern:plm:partedit?_pk=$_pk | Open Part ]]
+         *
+         * Result:
+         *
+         * $params['templates']['link_edit'] = [
+         *     'label'   => 'Mein Link',
+         *     'content' => '[[ :intern:plm:partedit?_pk=$_pk | Open Part ]]',
+         * ];
+         *
+         * The old $params['template'] representation is retained
+         * for compatibility with existing PlmTable code.
+         */
+        if (isset($params['template'])) {
+
+            $templateDefinitions = [];
+            $legacyTemplates = [];
+
+            foreach ($params['template'] as $tokens) {
+
+                if (empty($tokens)) {
+                    continue;
+                }
+
+                $templateName =
+                    trim(
+                        (string) ($tokens[0] ?? '')
+                    );
+
+                if ($templateName === '') {
+                    throw new InvalidArgumentException(
+                        'PLM template requires a name.'
+                    );
+                }
+
+                if (!preg_match(
+                    '/^[a-zA-Z_][a-zA-Z0-9_-]*$/',
+                    $templateName
+                )) {
+                    throw new InvalidArgumentException(
+                        'Invalid PLM template name: ' .
+                        $templateName
+                    );
+                }
+
+                /*
+                 * Optional display label.
+                 *
+                 * Example:
+                 *
+                 * "Mein Link"
+                 */
+                $label = '';
+
+                if (
+                    isset($tokens[1]) &&
+                    is_string($tokens[1])
+                ) {
+                    $label =
+                        (string) $tokens[1];
+                }
+
+                /*
+                 * Everything after the name and optional
+                 * label belongs to the template content.
+                 */
+                $contentTokens =
+                    array_slice(
+                        $tokens,
+                        2
+                    );
+
+                /*
+                 * Reconstruct the template content with
+                 * spaces between tokens.
+                 */
+                $templateContent =
+                    implode(
+                        ' ',
+                        $contentTokens
+                    );
+
+                /*
+                 * Store the structured representation.
+                 */
+                $templateDefinitions[$templateName] = [
+                    'label' =>
+                        $label,
+
+                    'content' =>
+                        $templateContent,
+                ];
+
+                /*
+                 * Keep the previous representation:
+                 *
+                 * [
+                 *     name,
+                 *     label,
+                 *     content...
+                 * ]
+                 */
+                $legacyTemplates[$templateName] = [
+                    $templateName,
+                    $label,
+                    ...$contentTokens,
+                ];
+            }
+
+            $params['templates'] =
+                $templateDefinitions;
+
+            /*
+             * For compatibility, retain the old singular
+             * template representation for the first template.
+             */
+            if (!empty($legacyTemplates)) {
+
+                $firstTemplate =
+                    reset(
+                        $legacyTemplates
+                    );
+
+                $params['template'] =
+                    $firstTemplate;
+            } else {
+
+                $params['template'] = [];
+            }
         }
 
         /*
@@ -238,13 +385,23 @@ class PlmParser
         $result = [];
 
         foreach ($tokens as $token) {
-            $parts = explode(',', $token);
+
+            $parts =
+                explode(
+                    ',',
+                    $token
+                );
 
             foreach ($parts as $part) {
-                $part = trim($part);
+
+                $part =
+                    trim(
+                        $part
+                    );
 
                 if ($part !== '') {
-                    $result[] = $part;
+                    $result[] =
+                        $part;
                 }
             }
         }
