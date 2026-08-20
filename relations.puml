@@ -1,0 +1,104 @@
+@startuml PLM_BOM_ERD
+
+' --- Konfiguration für saubere Darstellung ---
+hide circle
+skinparam linetype ortho
+skinparam monochrome false
+skinparam class {
+    BackgroundColor White
+    ArrowColor #268bd2
+    BorderColor #586e75
+}
+
+title Relationales PLM- & BOM-Datenmodell (Final - Nur globale Ersetzungen)
+
+' --- Entitäten / Tabellen ---
+
+entity "part\n(Artikelstamm)" as part {
+    * **part_id** : INT [PK]
+    --
+    * ipn : VARCHAR(50) [Unique]
+    * base_unit : VARCHAR(10)
+}
+
+entity "plm_part_version\n(Technische Revision)" as plm_part_version {
+    * **version_id** : INT [PK]
+    --
+    * part_id : INT [FK]
+    * revision : VARCHAR(10)
+    * lifecycle_status : ENUM('In Work', 'Released', 'Obsolete')
+}
+
+entity "plm_part_item\n(Stücklistenposition)" as plm_part_item {
+    * **plm_part_item_id** : INT [PK]
+    --
+    * parent_version_id : INT [FK]
+    * child_part_id : INT [FK]
+    * quantity : DECIMAL(10,4)
+    * designators : VARCHAR(255)
+}
+
+entity "plm_part_substitutes\n(Globale Alternativteile 1:1)" as plm_part_substitutes {
+    * **substitute_id** : INT [PK]
+    --
+    * part_id_1 : INT [FK]
+    * part_id_2 : INT [FK]
+}
+
+entity "plm_manufacturer\n(Hersteller-Stammdaten)" as plm_manufacturer {
+    * **manufacturer_id** : INT [PK]
+    --
+    * name : VARCHAR(100) [Unique]
+}
+
+entity "plm_manufacturer_part\n(Herstellerartikel / AML)" as plm_manufacturer_part {
+    * **mpn_id** : INT [PK]
+    --
+    * part_id : INT [FK]
+    * manufacturer_id : INT [FK]
+    * mpn : VARCHAR(100)
+}
+
+entity "plm_supplier\n(Lieferanten-Stammdaten)" as plm_supplier {
+    * **supplier_id** : INT [PK]
+    --
+    * name : VARCHAR(100) [Unique]
+    - supplier_code : VARCHAR(50)
+}
+
+entity "plm_supplier_part\n(Lieferantenartikel / AVL)" as plm_supplier_part {
+    * **spn_id** : INT [PK]
+    --
+    * mpn_id : INT [FK]
+    * supplier_id : INT [FK]
+    * spn : VARCHAR(100)
+}
+
+' --- Beziehungen (Relations) ---
+
+' Ein Part hat viele Versionen
+part "1" --o{ "N" plm_part_version : "besitzt"
+
+' Eine spezifische Baugruppen-Version steuert die Stückliste
+plm_part_version "1" --o{ "N" plm_part_item : "definiert Struktur von"
+
+' Ein Part kann als Kind in vielen Stücklisten stecken
+part "1" --o{ "N" plm_part_item : "wird verbaut als"
+
+' Ein Part kann viele globale 1:1 Ersetzungen haben
+part "1" --o{ "N" plm_part_substitutes : "Original"
+part "1" --o{ "N" plm_part_substitutes : "Ersatz"
+
+' Ein Artikel (Part) wird mit echten Herstellerteilen qualifiziert
+part "1" --o{ "N" plm_manufacturer_part : "qualifiziert mit"
+
+' Ein Hersteller besitzt viele Herstellerartikel
+plm_manufacturer "1" --o{ "N" plm_manufacturer_part : "stellt her"
+
+' Ein Herstellerteil kann von verschiedenen Lieferanten bezogen werden
+plm_manufacturer_part "1" --o{ "N" plm_supplier_part : "wird vertrieben über"
+
+' Ein Lieferant vertreibt viele Lieferantenartikel
+plm_supplier "1" --o{ "N" plm_supplier_part : "verkauft"
+
+@enduml

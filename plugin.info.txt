@@ -1,0 +1,10 @@
+base   plm
+author Raven's Night
+email  ravensnight@hoheisels-welt.de
+date   2026-08-16
+name   PLM Plugin
+desc   Provides scripts for a simple plm system. Note: this plugin requires Struct plugin.
+url    https://dokuwiki.org
+type   syntax
+depends struct
+conflicts
