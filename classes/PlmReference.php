@@ -2,54 +2,21 @@
 
 class PlmReference
 {
-    /**
-     * Reference types.
-     */
     public const TYPE_REQUEST = 'request';
-
     public const TYPE_STRUCT = 'struct';
-
     public const TYPE_STATE = 'state';
-
     public const TYPE_TEMPLATE = 'template';
 
-    /**
-     * @var PlmState
-     */
     private PlmState $state;
 
-    /**
-     * @var PlmStruct|null
-     */
     private ?PlmStruct $struct;
 
-    /**
-     * Current Struct row.
-     *
-     * Contains Struct Value objects indexed by their
-     * Struct column position.
-     */
     private ?array $row = null;
 
-    /**
-     * Current Struct field indexes.
-     */
     private array $fieldIndexes = [];
 
-    /**
-     * Current Struct row RID.
-     */
     private ?int $rowRid = null;
 
-    /**
-     * Available templates.
-     *
-     * Example:
-     *
-     * [
-     *     'details' => 'intern:plm:details:$category:$part._pk',
-     * ]
-     */
     private array $templates = [];
 
     public function __construct(
@@ -60,9 +27,6 @@ class PlmReference
         $this->struct = $struct;
     }
 
-    /**
-     * Set the current Struct row.
-     */
     public function setRow(
         ?array $row,
         array $fieldIndexes = [],
@@ -79,9 +43,6 @@ class PlmReference
             $rid;
     }
 
-    /**
-     * Clear the current Struct row.
-     */
     public function clearRow(): void
     {
         $this->row = null;
@@ -89,13 +50,6 @@ class PlmReference
         $this->rowRid = null;
     }
 
-    /**
-     * Set all available templates.
-     *
-     * Template names are referenced with:
-     *
-     *     @details
-     */
     public function setTemplates(
         array $templates
     ): void {
@@ -113,9 +67,7 @@ class PlmReference
                 continue;
             }
 
-            if (
-                !is_string($template)
-            ) {
+            if (!is_string($template)) {
                 continue;
             }
 
@@ -124,17 +76,12 @@ class PlmReference
         }
     }
 
-    /**
-     * Add or replace one template.
-     */
     public function setTemplate(
         string $name,
         string $template
     ): void {
 
-        if (
-            !$this->isValidName($name)
-        ) {
+        if (!$this->isValidName($name)) {
             return;
         }
 
@@ -142,119 +89,65 @@ class PlmReference
             $template;
     }
 
-    /**
-     * Remove one template.
-     */
     public function clearTemplate(
         string $name
     ): void {
 
-        if (
-            !$this->isValidName($name)
-        ) {
+        if (!$this->isValidName($name)) {
             return;
         }
 
-        unset(
-            $this->templates[$name]
-        );
+        unset($this->templates[$name]);
     }
 
-    /**
-     * Get all registered templates.
-     */
     public function getTemplates(): array
     {
         return $this->templates;
     }
 
-    /**
-     * Resolve a complete reference.
-     *
-     * Supported:
-     *
-     *     &_pk
-     *     $ipn
-     *     $_pk
-     *     $part._pk
-     *     %mycontext.filter.ipn
-     *     %mycontext.current._pk
-     *     @details
-     */
     public function resolve(
         string $reference
     ): ?string {
 
         $reference =
-            trim(
-                $reference
-            );
+            trim($reference);
 
         if ($reference === '') {
             return null;
         }
 
-        if (
-            $reference[0] === '&'
-        ) {
-
+        if ($reference[0] === '&') {
             return $this->resolveRequest(
-                substr(
-                    $reference,
-                    1
-                )
+                substr($reference, 1)
             );
         }
 
-        if (
-            $reference[0] === '$'
-        ) {
-
+        if ($reference[0] === '$') {
             return $this->resolveStruct(
-                substr(
-                    $reference,
-                    1
-                )
+                substr($reference, 1)
             );
         }
 
-        if (
-            $reference[0] === '%'
-        ) {
-
+        if ($reference[0] === '%') {
             return $this->resolveState(
-                substr(
-                    $reference,
-                    1
-                )
+                substr($reference, 1)
             );
         }
 
-        if (
-            $reference[0] === '@'
-        ) {
-
+        if ($reference[0] === '@') {
             return $this->resolveTemplate(
-                substr(
-                    $reference,
-                    1
-                )
+                substr($reference, 1)
             );
         }
 
         return null;
     }
 
-    /**
-     * Resolve a request reference.
-     */
     private function resolveRequest(
         string $name
     ): ?string {
 
-        if (
-            !$this->isValidName($name)
-        ) {
+        if (!$this->isValidName($name)) {
             return null;
         }
 
@@ -268,35 +161,27 @@ class PlmReference
             try {
 
                 $value =
-                    $INPUT->str(
-                        $name
-                    );
+                    $INPUT->str($name);
 
                 if ($value !== null) {
                     return (string) $value;
                 }
 
             } catch (Throwable $e) {
-                // Fall through.
             }
 
-            if (
-                isset($INPUT->get)
-            ) {
+            if (isset($INPUT->get)) {
 
                 try {
 
                     $value =
-                        $INPUT->get->str(
-                            $name
-                        );
+                        $INPUT->get->str($name);
 
                     if ($value !== null) {
                         return (string) $value;
                     }
 
                 } catch (Throwable $e) {
-                    // Fall through.
                 }
             }
         }
@@ -314,22 +199,21 @@ class PlmReference
     }
 
     /**
-     * Resolve a current Struct reference.
+     * Resolve a reference against the current Struct row.
      *
-     *     $ipn
-     *     $_pk
-     *     $part._pk
+     * $field
+     *     -> display value
+     *
+     * $field._pk
+     *     -> raw Lookup RID
+     *
+     * $_pk
+     *     -> current row RID
      */
     private function resolveStruct(
         string $reference
     ): ?string {
 
-        /*
-         * Primary key of the current Struct row.
-         *
-         * _pk is not a normal Struct column and therefore
-         * is not present in $fieldIndexes.
-         */
         if (
             $reference ===
             PlmStruct::PRIMARY_KEY_FIELD
@@ -342,17 +226,10 @@ class PlmReference
             return (string) $this->rowRid;
         }
 
-        if (
-            $this->row === null
-        ) {
+        if ($this->row === null) {
             return null;
         }
 
-        /*
-         * Lookup RID:
-         *
-         *     $part._pk
-         */
         if (
             str_ends_with(
                 $reference,
@@ -367,9 +244,7 @@ class PlmReference
                     -4
                 );
 
-            if (
-                !$this->isValidName($field)
-            ) {
+            if (!$this->isValidName($field)) {
                 return null;
             }
 
@@ -378,14 +253,7 @@ class PlmReference
             );
         }
 
-        /*
-         * Normal current-row field:
-         *
-         *     $ipn
-         */
-        if (
-            !$this->isValidName($reference)
-        ) {
+        if (!$this->isValidName($reference)) {
             return null;
         }
 
@@ -410,13 +278,18 @@ class PlmReference
             return null;
         }
 
-        return $this->stringifyStructValue(
+        /*
+         * Normal Struct references are display-oriented.
+         *
+         * This is deliberately different from PLM State.
+         */
+        return $this->stringifyStructDisplayValue(
             $this->row[$index]
         );
     }
 
     /**
-     * Resolve the RID of a Lookup field.
+     * Resolve the first RID of a Struct Lookup field.
      */
     private function resolveLookupRid(
         string $field
@@ -446,9 +319,7 @@ class PlmReference
         $value =
             $this->row[$index];
 
-        if (
-            $this->struct === null
-        ) {
+        if ($this->struct === null) {
             return null;
         }
 
@@ -457,9 +328,7 @@ class PlmReference
                 $value
             );
 
-        if (
-            empty($rids)
-        ) {
+        if (empty($rids)) {
             return null;
         }
 
@@ -467,10 +336,12 @@ class PlmReference
     }
 
     /**
-     * Resolve a PLM state reference.
+     * Resolve PLM State.
      *
-     *     %mycontext.filter.ipn
-     *     %mycontext.current._pk
+     * IMPORTANT:
+     *
+     * State contains raw values.
+     * No Struct display conversion takes place here.
      */
     private function resolveState(
         string $path
@@ -482,9 +353,7 @@ class PlmReference
                 $path
             );
 
-        if (
-            count($parts) !== 3
-        ) {
+        if (count($parts) !== 3) {
             return null;
         }
 
@@ -492,8 +361,7 @@ class PlmReference
             $context,
             $scope,
             $field
-        ] =
-            $parts;
+        ] = $parts;
 
         if (
             !$this->isValidName($context) ||
@@ -510,18 +378,11 @@ class PlmReference
         );
     }
 
-    /**
-     * Resolve a template reference.
-     *
-     *     @details
-     */
     private function resolveTemplate(
         string $name
     ): ?string {
 
-        if (
-            !$this->isValidName($name)
-        ) {
+        if (!$this->isValidName($name)) {
             return null;
         }
 
@@ -537,17 +398,6 @@ class PlmReference
         return $this->templates[$name];
     }
 
-    /**
-     * Expand all references inside arbitrary text.
-     *
-     * Examples:
-     *
-     *     intern:plm:details:$category:$part._pk
-     *
-     *     intern:plm:details:%mycontext.current._pk
-     *
-     *     @details
-     */
     public function expand(
         string $text,
         bool $keepUnresolved = true
@@ -560,18 +410,12 @@ class PlmReference
         );
     }
 
-    /**
-     * Recursive expansion implementation.
-     */
     private function expandRecursive(
         string $text,
         bool $keepUnresolved,
         array $templateStack
     ): string {
 
-        /*
-         * Request references.
-         */
         $text =
             preg_replace_callback(
                 '/&([a-zA-Z0-9_-]+)/',
@@ -586,9 +430,7 @@ class PlmReference
                             $reference
                         );
 
-                    if (
-                        $value === null
-                    ) {
+                    if ($value === null) {
                         return $keepUnresolved
                             ? $match[0]
                             : '';
@@ -599,12 +441,6 @@ class PlmReference
                 $text
             );
 
-        /*
-         * Struct references.
-         *
-         * $part._pk must be matched as one
-         * reference before normal $field.
-         */
         $text =
             preg_replace_callback(
                 '/\$([a-zA-Z0-9_-]+(?:\._pk)?)/',
@@ -619,9 +455,7 @@ class PlmReference
                             $reference
                         );
 
-                    if (
-                        $value === null
-                    ) {
+                    if ($value === null) {
                         return $keepUnresolved
                             ? $match[0]
                             : '';
@@ -632,11 +466,6 @@ class PlmReference
                 $text
             );
 
-        /*
-         * PLM state references.
-         *
-         *     %context.scope.field
-         */
         $text =
             preg_replace_callback(
                 '/%([a-zA-Z0-9_-]+'
@@ -653,9 +482,7 @@ class PlmReference
                             $reference
                         );
 
-                    if (
-                        $value === null
-                    ) {
+                    if ($value === null) {
                         return $keepUnresolved
                             ? $match[0]
                             : '';
@@ -666,12 +493,6 @@ class PlmReference
                 $text
             );
 
-        /*
-         * Template references.
-         *
-         * Resolve the template itself and then
-         * recursively expand its contents.
-         */
         $text =
             preg_replace_callback(
                 '/@([a-zA-Z0-9_-]+)/',
@@ -684,11 +505,6 @@ class PlmReference
                     $name =
                         $match[1];
 
-                    /*
-                     * Detect template recursion.
-                     *
-                     * @a -> @b -> @a
-                     */
                     if (
                         in_array(
                             $name,
@@ -706,9 +522,7 @@ class PlmReference
                             '@' . $name
                         );
 
-                    if (
-                        $template === null
-                    ) {
+                    if ($template === null) {
                         return $keepUnresolved
                             ? $match[0]
                             : '';
@@ -730,9 +544,12 @@ class PlmReference
     }
 
     /**
-     * Convert a Struct Value into a scalar string.
+     * Convert a Struct Value into its display value.
+     *
+     * This is ONLY used for live Struct row references.
+     * It is never used when reading PLM State.
      */
-    private function stringifyStructValue(
+    private function stringifyStructDisplayValue(
         $value
     ): ?string {
 
@@ -757,21 +574,13 @@ class PlmReference
             return (string) $display;
         }
 
-        if (
-            is_scalar($value)
-        ) {
+        if (is_scalar($value)) {
             return (string) $value;
         }
 
         return null;
     }
 
-    /**
-     * Validate a reference name.
-     *
-     * Dots are deliberately excluded because they
-     * have structural meaning in references.
-     */
     private function isValidName(
         string $name
     ): bool {

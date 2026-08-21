@@ -454,9 +454,6 @@ class PlmStruct
         ];
     }
 
-    /**
-     * Find the first record matching a filter.
-     */
     public function findOne(
         string $schema,
         string $filter
@@ -473,24 +470,114 @@ class PlmStruct
                 $filter
             );
 
+        /*
+        * Determine all real Struct fields.
+        *
+        * findOne() must return the complete row because callers
+        * such as PlmSelect may resolve arbitrary fields afterwards.
+        */
+        $schemaObject =
+            new \dokuwiki\plugin\struct\meta\Schema(
+                $schema
+            );
+
+        if (!$schemaObject->getId()) {
+            throw new \RuntimeException(
+                'Struct schema does not exist: ' .
+                $schema
+            );
+        }
+
+        $columns =
+            $schemaObject->getColumns();
+
+        if (empty($columns)) {
+            throw new \RuntimeException(
+                'Struct schema contains no fields: ' .
+                $schema
+            );
+        }
+
+        $fields = [];
+
+        foreach (
+            $columns as $column
+        ) {
+
+            if (
+                !is_object($column) ||
+                !method_exists(
+                    $column,
+                    'getLabel'
+                )
+            ) {
+                continue;
+            }
+
+            $field =
+                $column->getLabel();
+
+            if (
+                !is_string($field) ||
+                $field === '' ||
+                $field === self::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
+            $fields[] =
+                $field;
+        }
+
+        /*
+        * The filter field must be part of the result as well.
+        *
+        * This is normally already true because it comes from
+        * the schema, but keeping it here makes findOne robust.
+        */
+        if (
+            $parsed[0] !== self::PRIMARY_KEY_FIELD &&
+            !in_array(
+                $parsed[0],
+                $fields,
+                true
+            )
+        ) {
+            $fields[] =
+                $parsed[0];
+        }
+
+        if (empty($fields)) {
+            throw new \RuntimeException(
+                'Could not determine Struct fields.'
+            );
+        }
+
+        /*
+        * _pk is resolved separately because it is not a real
+        * Struct field.
+        */
         if (
             $parsed[0] ===
             self::PRIMARY_KEY_FIELD
         ) {
 
-            return $this->findByPrimaryKey(
-                $schema,
-                $parsed[2]
-            );
+            $record =
+                $this->findByPrimaryKey(
+                    $schema,
+                    $parsed[2]
+                );
+
+            return $record;
         }
 
-        $filterField =
-            $parsed[0];
-
+        /*
+        * Search for the record while requesting ALL Struct fields.
+        */
         $result =
             $this->search(
                 $schema,
-                [$filterField],
+                $fields,
                 $filter
             );
 
@@ -518,6 +605,15 @@ class PlmStruct
                 $rids[0] ?? 0
             );
 
+        $fieldIndexes = [];
+
+        foreach (
+            $fields as $index => $field
+        ) {
+            $fieldIndexes[$field] =
+                $index;
+        }
+
         return [
             'row' =>
                 $rows[0],
@@ -530,9 +626,11 @@ class PlmStruct
 
             '_pk' =>
                 $rid,
+
+            'fieldIndexes' =>
+                $fieldIndexes,
         ];
     }
-
     /**
      * Find a record by its technical Struct RID.
      *
