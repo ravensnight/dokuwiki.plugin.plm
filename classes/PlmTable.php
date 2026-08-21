@@ -14,6 +14,9 @@ class PlmTable
     /** @var PlmState */
     private $state;
 
+    /** @var PlmReference */
+    private $reference;
+
     public function __construct(
         Doku_Renderer $renderer,
         PlmStruct $struct,
@@ -24,6 +27,12 @@ class PlmTable
         $this->struct = $struct;
         $this->parser = $parser;
         $this->state = $state;
+
+        $this->reference =
+            new PlmReference(
+                $state,
+                $struct
+            );
     }
 
     public function render(
@@ -35,6 +44,7 @@ class PlmTable
     ): void {
 
         if (empty($schema)) {
+
             $this->error(
                 'PLM table: parameter "schema" is required'
             );
@@ -48,6 +58,7 @@ class PlmTable
             );
 
         if (empty($params['cols'])) {
+
             $this->error(
                 'PLM table: parameter "cols" is required'
             );
@@ -57,6 +68,18 @@ class PlmTable
 
         $columns =
             $params['cols'];
+
+        /*
+         * Templates belong to PlmReference.
+         *
+         * The parser's template definition is converted
+         * into the reference resolver's name => text map.
+         */
+        $this->reference->setTemplates(
+            $this->getTemplates(
+                $params['template'] ?? []
+            )
+        );
 
         try {
 
@@ -87,8 +110,6 @@ class PlmTable
              * Example:
              *
              *     part._pk=123
-             *
-             * The expression is NOT sent to Struct.
              */
             $lookupFilters =
                 $this->extractLookupFilters(
@@ -99,9 +120,9 @@ class PlmTable
                 $lookupFilters['filter'];
 
             /*
-             * The lookup field itself must be included
-             * in the result so we can inspect its stored
-             * [page-id,rid] value.
+             * Lookup fields must be present in the
+             * Struct result so their referenced RIDs
+             * can be inspected.
              */
             foreach (
                 $lookupFilters['fields']
@@ -120,18 +141,7 @@ class PlmTable
             }
 
             /*
-             * Remove accidental *. _pk fields.
-             *
-             * A Lookup RID is a PLM-level pseudo field and
-             * must never be passed to Struct.
-             *
-             * Example:
-             *
-             *     part._pk
-             *
-             * becomes:
-             *
-             *     part
+             * Remove PLM pseudo fields before Struct.
              */
             $fields =
                 $this->normalizeStructFields(
@@ -153,9 +163,6 @@ class PlmTable
 
             /*
              * Apply Lookup RID filters in PHP.
-             *
-             * This is deliberately done after Struct
-             * has returned the matching records.
              */
             if (!empty($lookupFilters['conditions'])) {
 
@@ -192,18 +199,49 @@ class PlmTable
     }
 
     /**
+     * Convert parser template definitions into the
+     * name => template text format expected by PlmReference.
+     */
+    private function getTemplates(
+        array $template
+    ): array {
+
+        if (
+            empty($template) ||
+            !isset($template[0])
+        ) {
+            return [];
+        }
+
+        $templates = [];
+
+        $name =
+            trim(
+                (string) $template[0]
+            );
+
+        if ($name === '') {
+            return [];
+        }
+
+        $text =
+            implode(
+                ' ',
+                array_slice(
+                    $template,
+                    2
+                )
+            );
+
+        $templates[$name] =
+            $text;
+
+        return $templates;
+    }
+
+    /**
      * Normalize PLM pseudo fields before passing them
      * to Struct.
-     *
-     * Exact "_pk" is handled by PlmStruct itself.
-     *
-     * Lookup pseudo fields:
-     *
-     *     part._pk
-     *
-     * are converted to:
-     *
-     *     part
      */
     private function normalizeStructFields(
         array $fields
@@ -256,14 +294,6 @@ class PlmTable
 
     /**
      * Expand PLM filter placeholders.
-     *
-     * Supports:
-     *
-     *     &_pk
-     *
-     * and:
-     *
-     *     $partselect._pk
      */
     private function expandFilter(
         string $filter
@@ -285,64 +315,46 @@ class PlmTable
                     use (&$hasEmptyParameter) {
 
                     $value =
-                        $this->getUriParam(
-                            $match[1]
+                        $this->reference->resolve(
+                            '&' . $match[1]
                         );
 
-                    if ($value === '') {
+                    if ($value === null || $value === '') {
                         $hasEmptyParameter = true;
+                        $value = '';
                     }
 
-                    return $value;
+                    return $this->escapeFilterValue(
+                        $value
+                    );
                 },
                 $filter
             );
 
         /*
-         * PLM select references.
-         *
-         *     $partselect._pk
+         * PLM state references.
          */
         $filter =
             preg_replace_callback(
-                '/\$([a-zA-Z0-9_-]+)\._pk\b/',
+                '/%([a-zA-Z0-9_-]+'
+                . '\.[a-zA-Z0-9_-]+'
+                . '\.[a-zA-Z0-9_-]+)/',
                 function ($match)
                     use (&$hasEmptyParameter) {
 
-                    $selectName =
-                        $match[1];
-
                     $value =
-                        PlmSelect::getSelectionValue(
-                            $selectName,
-                            PlmStruct::PRIMARY_KEY_FIELD
+                        $this->reference->resolve(
+                            '%' . $match[1]
                         );
 
-                    if (
-                        $value === null ||
-                        $value === ''
-                    ) {
-
+                    if ($value === null || $value === '') {
                         $hasEmptyParameter = true;
-
-                        return '';
+                        $value = '';
                     }
 
-                    if (
-                        !ctype_digit(
-                            (string) $value
-                        ) ||
-                        (int) $value <= 0
-                    ) {
-
-                        throw new \RuntimeException(
-                            'PLM select "' .
-                            $selectName .
-                            '" returned an invalid _pk.'
-                        );
-                    }
-
-                    return (string) $value;
+                    return $this->escapeFilterValue(
+                        $value
+                    );
                 },
                 $filter
             );
@@ -356,25 +368,6 @@ class PlmTable
 
     /**
      * Extract Lookup RID filters from a PLM filter.
-     *
-     * Recognized syntax:
-     *
-     *     part._pk=123
-     *     part._pk = 123
-     *
-     * Returns:
-     *
-     *     [
-     *         'filter' => normal Struct filter or null,
-     *         'conditions' => [
-     *             [
-     *                 'field' => 'part',
-     *                 'rid' => 123,
-     *                 'operator' => '='
-     *             ]
-     *         ],
-     *         'fields' => ['part']
-     *     ]
      */
     private function extractLookupFilters(
         ?string $filter
@@ -400,10 +393,6 @@ class PlmTable
         $conditions = [];
         $fields = [];
 
-        /*
-         * Only simple equality/inequality is supported
-         * for Lookup._pk.
-         */
         $pattern =
             '/\b(' .
             '[a-zA-Z0-9_.-]+' .
@@ -430,9 +419,6 @@ class PlmTable
                     $rid =
                         (int) $match[3];
 
-                    /*
-                     * Only field._pk is special.
-                     */
                     if (
                         !str_ends_with(
                             $field,
@@ -450,12 +436,14 @@ class PlmTable
                         );
 
                     if ($lookupField === '') {
+
                         throw new \RuntimeException(
                             'Invalid PLM Lookup _pk filter.'
                         );
                     }
 
                     if ($rid <= 0) {
+
                         throw new \RuntimeException(
                             'PLM Lookup _pk must be greater than zero.'
                         );
@@ -480,10 +468,6 @@ class PlmTable
                 $filter
             );
 
-        /*
-         * Clean up logical operators left behind after
-         * removing special conditions.
-         */
         $normalFilter =
             $this->cleanLogicalFilter(
                 $normalFilter
@@ -506,8 +490,8 @@ class PlmTable
     }
 
     /**
-     * Remove logical debris left after special filter
-     * conditions have been extracted.
+     * Remove logical debris left after special
+     * filter conditions have been extracted.
      */
     private function cleanLogicalFilter(
         ?string $filter
@@ -522,9 +506,6 @@ class PlmTable
                 $filter
             );
 
-        /*
-         * Repeatedly remove empty parenthesized parts.
-         */
         do {
 
             $oldFilter =
@@ -578,9 +559,6 @@ class PlmTable
             return null;
         }
 
-        /*
-         * If only one wrapping pair remains, remove it.
-         */
         while (
             strlen($filter) >= 2 &&
             $filter[0] === '(' &&
@@ -612,17 +590,6 @@ class PlmTable
 
     /**
      * Filter Struct rows according to Lookup RIDs.
-     *
-     * The Struct Lookup value internally contains:
-     *
-     *     [page-id, rid]
-     *
-     * We compare the rid, not the display value.
-     *
-     * Important:
-     *
-     * The Lookup type is determined from the Struct
-     * Column, not from the Value object.
      */
     private function filterRowsByLookupRid(
         $search,
@@ -631,16 +598,13 @@ class PlmTable
     ): array {
 
         if (empty($conditions)) {
+
             return [
                 $search,
                 $rows
             ];
         }
 
-        /*
-         * Build the column index and retain the actual
-         * Struct Column objects.
-         */
         $columns = [];
 
         foreach (
@@ -701,10 +665,6 @@ class PlmTable
                 $columnIndex =
                     $columns[$field]['index'];
 
-                /*
-                 * Determine Lookup from the Struct
-                 * Column itself.
-                 */
                 if (
                     !$this->struct->isLookupColumn(
                         $column
@@ -732,13 +692,6 @@ class PlmTable
                 $value =
                     $row[$columnIndex];
 
-                /*
-                 * Extract the actual referenced RID(s).
-                 *
-                 * PlmStruct handles the Struct Lookup JSON,
-                 * including the case where getValue() returns
-                 * a JSON encoded array containing JSON strings.
-                 */
                 $lookupRids =
                     $this->struct->getLookupPrimaryKeys(
                         $value
@@ -787,11 +740,6 @@ class PlmTable
                 $pids[$rowIndex] ?? '';
         }
 
-        /*
-         * SearchConfig itself cannot be reconstructed from
-         * an already filtered result. We therefore wrap the
-         * result object only for the methods PlmTable needs.
-         */
         $filteredSearch =
             new PlmTableFilteredSearch(
                 $search,
@@ -806,15 +754,17 @@ class PlmTable
     }
 
     /**
-     * Build a Struct filter from current PLM state.
+     * Build a Struct filter from the table's
+     * context filter scope.
      */
     private function buildStateFilter(
         string $name
     ): ?string {
 
         $values =
-            $this->state->getFilter(
-                $name
+            $this->state->getScope(
+                $name,
+                'filter'
             );
 
         if (empty($values)) {
@@ -987,14 +937,19 @@ class PlmTable
             }
         }
 
+        /*
+         * Template references are resolved by PlmReference.
+         */
         foreach (
-            $params['template'] ?? []
-            as $token
+            $this->getTemplates(
+                $params['template'] ?? []
+            )
+            as $template
         ) {
 
             preg_match_all(
-                '/\$([a-zA-Z0-9_.-]+)/',
-                $token,
+                '/\$([a-zA-Z0-9_-]+(?:\._pk)?)/',
+                $template,
                 $matches
             );
 
@@ -1007,6 +962,25 @@ class PlmTable
                     $field ===
                     PlmStruct::PRIMARY_KEY_FIELD
                 ) {
+                    continue;
+                }
+
+                if (
+                    str_ends_with(
+                        $field,
+                        '._pk'
+                    )
+                ) {
+
+                    $field =
+                        substr(
+                            $field,
+                            0,
+                            -4
+                        );
+                }
+
+                if ($field === '') {
                     continue;
                 }
 
@@ -1031,165 +1005,67 @@ class PlmTable
         string $name
     ): string {
 
-        global $INPUT;
+        $value =
+            $this->reference->resolve(
+                '&' . $name
+            );
 
-        return
-            $INPUT->str($name) ?? '';
+        return $value ?? '';
     }
 
     /**
-     * Get the configured template definition.
+     * Store the values of the current row in:
+     *
+     *     context.current.*
      */
-    private function getTemplateDefinition(
-        array $template,
-        string $name
-    ): ?array {
-
-        if (
-            empty($template) ||
-            ($template[0] ?? null) !== $name
-        ) {
-            return null;
-        }
-
-        return [
-            'name' =>
-                $name,
-
-            'label' =>
-                $template[1] ??
-                $name,
-
-            'text' =>
-                implode(
-                    ' ',
-                    array_slice(
-                        $template,
-                        2
-                    )
-                ),
-        ];
-    }
-
-    /**
-     * Expand a named PLM template.
-     */
-    private function expandTemplate(
-        array $template,
-        string $name,
+    private function storeCurrentRow(
+        string $context,
         array $row,
         array $fieldIndexes,
-        ?int $rid = null
-    ): ?string {
+        int $rid
+    ): void {
 
-        $definition =
-            $this->getTemplateDefinition(
-                $template,
-                $name
-            );
+        $current = [
+            PlmStruct::PRIMARY_KEY_FIELD =>
+                (string) $rid,
+        ];
 
-        if ($definition === null) {
-            return null;
+        foreach (
+            $fieldIndexes as $field => $index
+        ) {
+
+            if (
+                !array_key_exists(
+                    $index,
+                    $row
+                )
+            ) {
+                continue;
+            }
+
+            $value =
+                $row[$index];
+
+            if ($value === null) {
+                continue;
+            }
+
+            $displayValue =
+                $value->getDisplayValue();
+
+            if ($displayValue === null) {
+                continue;
+            }
+
+            $current[$field] =
+                (string) $displayValue;
         }
 
-        $text =
-            $definition['text'];
-
-        $text =
-            preg_replace_callback(
-                '/\$([a-zA-Z0-9_.-]+)/',
-                function ($match)
-                    use (
-                        $row,
-                        $fieldIndexes,
-                        $rid
-                    ) {
-
-                    $field =
-                        $match[1];
-
-                    if (
-                        $field ===
-                        PlmStruct::PRIMARY_KEY_FIELD
-                    ) {
-
-                        if ($rid === null) {
-                            return $match[0];
-                        }
-
-                        return (string) $rid;
-                    }
-
-                    /*
-                     * Lookup._pk inside templates.
-                     */
-                    if (
-                        str_ends_with(
-                            $field,
-                            '._pk'
-                        )
-                    ) {
-
-                        $lookupField =
-                            substr(
-                                $field,
-                                0,
-                                -4
-                            );
-
-                        if (
-                            !isset(
-                                $fieldIndexes[$lookupField]
-                            )
-                        ) {
-                            return $match[0];
-                        }
-
-                        $lookupRids =
-                            $this->struct->getLookupPrimaryKeys(
-                                $row[
-                                    $fieldIndexes[$lookupField]
-                                ]
-                            );
-
-                        if (empty($lookupRids)) {
-                            return '';
-                        }
-
-                        return implode(
-                            ',',
-                            $lookupRids
-                        );
-                    }
-
-                    if (
-                        !isset(
-                            $fieldIndexes[$field]
-                        )
-                    ) {
-                        return $match[0];
-                    }
-
-                    return $row[
-                        $fieldIndexes[$field]
-                    ]->getDisplayValue();
-                },
-                $text
-            );
-
-        $text =
-            preg_replace_callback(
-                '/&([a-zA-Z0-9_-]+)/',
-                function ($match) {
-
-                    return $this->getUriParam(
-                        $match[1]
-                    );
-                },
-                $text
-            );
-
-        return $text;
+        $this->state->setScope(
+            $context,
+            'current',
+            $current
+        );
     }
 
     /**
@@ -1299,15 +1175,19 @@ class PlmTable
                         1
                     );
 
-                $definition =
-                    $this->getTemplateDefinition(
+                $template =
+                    $this->reference->resolve(
+                        '@' . $templateName
+                    );
+
+                $label =
+                    $this->getTemplateLabel(
                         $params['template'] ?? [],
                         $templateName
                     );
 
                 $this->renderer->cdata(
-                    $definition['label']
-                        ?? $templateName
+                    $label
                 );
 
             } elseif (
@@ -1345,14 +1225,40 @@ class PlmTable
 
         if (!empty($createFields)) {
 
+            /*
+             * Create editors use the actual Struct
+             * column type.
+             *
+             * Therefore:
+             *
+             *     Text     -> text input
+             *     Dropdown -> select
+             *     Lookup   -> lookup select
+             *
+             * The filter row deliberately remains a
+             * free text field because PLM filters use
+             * wildcard matching.
+             */
             $this->renderCreateRow(
                 $columns,
-                $createFields
+                $createFields,
+                $fieldIndexes,
+                $search
             );
         }
 
         if (!empty($filterFields)) {
 
+            /*
+             * Filter deliberately remains text based.
+             *
+             * This allows:
+             *
+             *     value
+             *     *value*
+             *
+             * and PLM's wildcard matching.
+             */
             $this->renderFilterRow(
                 $name,
                 $columns,
@@ -1370,6 +1276,26 @@ class PlmTable
                     $rids[$rowIndex] ?? 0
                 );
 
+            /*
+             * Make the current row and its RID
+             * available to PlmReference.
+             */
+            $this->reference->setRow(
+                $row,
+                $fieldIndexes,
+                $rid
+            );
+
+            /*
+             * Keep the state model in sync.
+             */
+            $this->storeCurrentRow(
+                $name,
+                $row,
+                $fieldIndexes,
+                $rid
+            );
+
             $this->renderer->tablerow_open();
 
             foreach ($columns as $column) {
@@ -1383,40 +1309,27 @@ class PlmTable
                     )
                 ) {
 
-                    $templateName =
-                        substr(
-                            $column,
-                            1
-                        );
-
                     $expanded =
-                        $this->expandTemplate(
-                            $params['template'] ?? [],
-                            $templateName,
-                            $row,
-                            $fieldIndexes,
-                            $rid
+                        $this->reference->expand(
+                            $column
                         );
 
-                    if ($expanded !== null) {
+                    $instructions =
+                        p_get_instructions(
+                            $expanded
+                        );
 
-                        $instructions =
-                            p_get_instructions(
-                                $expanded
-                            );
+                    $info = [];
 
-                        $info = [];
+                    $html =
+                        p_render(
+                            'xhtml',
+                            $instructions,
+                            $info
+                        );
 
-                        $html =
-                            p_render(
-                                'xhtml',
-                                $instructions,
-                                $info
-                            );
-
-                        $this->renderer->doc .=
-                            $html;
-                    }
+                    $this->renderer->doc .=
+                        $html;
 
                 } elseif (
                     $column ===
@@ -1498,6 +1411,11 @@ class PlmTable
             $this->renderer->tablerow_close();
         }
 
+        /*
+         * The row is no longer valid after rendering.
+         */
+        $this->reference->clearRow();
+
         if (empty($rows)) {
 
             $this->renderer->tablerow_open();
@@ -1537,6 +1455,26 @@ class PlmTable
             $this->renderer->doc .=
                 '</form>';
         }
+    }
+
+    /**
+     * Get the label of a named template.
+     */
+    private function getTemplateLabel(
+        array $template,
+        string $name
+    ): string {
+
+        if (
+            empty($template) ||
+            ($template[0] ?? null) !== $name
+        ) {
+            return $name;
+        }
+
+        return
+            $template[1] ??
+            $name;
     }
 
     private function getFilterFields(
@@ -1639,9 +1577,25 @@ class PlmTable
         );
     }
 
+    /**
+     * Render the create row.
+     *
+     * Create fields use the actual Struct column type.
+     *
+     * This is important for:
+     *
+     *     Dropdown
+     *     Lookup
+     *     Multi-value fields
+     *
+     * The corresponding Struct editor is used instead
+     * of always rendering a plain text input.
+     */
     private function renderCreateRow(
         array $columns,
-        array $createFields
+        array $createFields,
+        array $fieldIndexes,
+        $search
     ): void {
 
         $this->renderer->tablerow_open();
@@ -1669,23 +1623,11 @@ class PlmTable
             }
 
             $this->renderer->doc .=
-                '<input type="text" ' .
-                'name="plm_create[' .
-                hsc($column) .
-                ']" ' .
-                'value="" ' .
-                'placeholder="' .
-                hsc(
-                    'Create ' . $column
-                ) .
-                '" ' .
-                'onkeydown="' .
-                'if(event.key===\'Enter\'){' .
-                'event.preventDefault();' .
-                'event.stopPropagation();' .
-                'return false;' .
-                '}' .
-                '">';
+                $this->renderCreateEditor(
+                    $column,
+                    $fieldIndexes,
+                    $search
+                );
 
             $this->renderer->tablecell_close();
         }
@@ -1705,6 +1647,153 @@ class PlmTable
         $this->renderer->tablerow_close();
     }
 
+    /**
+     * Render the editor for one Create field.
+     *
+     * The Struct type itself is responsible for deciding
+     * whether the editor is:
+     *
+     *     input
+     *     select
+     *     lookup
+     *     multi-select
+     *     etc.
+     */
+    private function renderCreateEditor(
+        string $field,
+        array $fieldIndexes,
+        $search
+    ): string {
+
+        if (
+            !isset(
+                $fieldIndexes[$field]
+            )
+        ) {
+
+            return $this->renderCreateTextInput(
+                $field
+            );
+        }
+
+        $columns =
+            $search->getColumns();
+
+        $index =
+            $fieldIndexes[$field];
+
+        $column =
+            $columns[$index] ?? null;
+
+        if (
+            !is_object($column) ||
+            !method_exists(
+                $column,
+                'getType'
+            )
+        ) {
+
+            return $this->renderCreateTextInput(
+                $field
+            );
+        }
+
+        $type =
+            $column->getType();
+
+        /*
+         * Multi-value fields use Struct's
+         * multi-value editor.
+         */
+        if (
+            method_exists(
+                $column,
+                'isMulti'
+            ) &&
+            $column->isMulti()
+        ) {
+
+            return
+                $type->multiValueEditor(
+                    'plm_create[' . $field . ']',
+                    [],
+                    'plm_create_' .
+                    $this->htmlId($field)
+                );
+        }
+
+        /*
+         * Normal fields use Struct's value editor.
+         *
+         * Dropdown -> <select>
+         * Lookup   -> Lookup <select>
+         * Text     -> <input>
+         * etc.
+         */
+        return
+            $type->valueEditor(
+                'plm_create[' . $field . ']',
+                '',
+                'plm_create_' .
+                $this->htmlId($field)
+            );
+    }
+
+    /**
+     * Fallback text input for Create fields where
+     * Struct does not provide a usable column/type.
+     */
+    private function renderCreateTextInput(
+        string $field
+    ): string {
+
+        return
+            '<input type="text" ' .
+            'name="plm_create[' .
+            hsc($field) .
+            ']" ' .
+            'value="" ' .
+            'placeholder="' .
+            hsc(
+                'Create ' . $field
+            ) .
+            '" ' .
+            'onkeydown="' .
+            'if(event.key===\'Enter\'){' .
+            'event.preventDefault();' .
+            'event.stopPropagation();' .
+            'return false;' .
+            '}' .
+            '">';
+    }
+
+    /**
+     * Generate a safe HTML id from a Struct field name.
+     */
+    private function htmlId(
+        string $field
+    ): string {
+
+        return preg_replace(
+            '/[^a-zA-Z0-9_-]+/',
+            '_',
+            $field
+        );
+    }
+
+    /**
+     * Render the filter row.
+     *
+     * Deliberately uses text inputs for all fields.
+     *
+     * This is required for PLM's wildcard search:
+     *
+     *     foo
+     *     *foo*
+     *
+     * The filter value is later converted into a
+     * Struct wildcard filter.
+     */
     private function renderFilterRow(
         string $name,
         array $columns,
@@ -1736,8 +1825,9 @@ class PlmTable
             }
 
             $value =
-                $this->state->getFilterValue(
+                $this->state->getValue(
                     $name,
+                    'filter',
                     $column
                 );
 
@@ -1834,9 +1924,6 @@ class PlmTable
 /**
  * Lightweight wrapper around a Struct Search object
  * with a filtered subset of rows/RIDs/PIDs.
- *
- * PlmTable only needs these methods after its
- * application-level Lookup filtering.
  */
 class PlmTableFilteredSearch
 {

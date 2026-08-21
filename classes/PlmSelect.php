@@ -2,97 +2,40 @@
 
 class PlmSelect
 {
+    /** @var Doku_Renderer */
     private $renderer;
 
+    /** @var PlmStruct */
     private $struct;
 
+    /** @var PlmState */
     private $state;
 
-    /**
-     * Selection results are kept for the duration
-     * of the current PHP request.
-     *
-     * This allows:
-     *
-     *     $partselect._pk
-     *
-     * to be used by a following PLM table.
-     */
-    private static array $selections = [];
-
-    private const FIELD_PATTERN =
-        '[a-zA-Z0-9]+(?:[_.-][a-zA-Z0-9]+)*';
-
-    private const STATE_PATTERN =
-        '[a-zA-Z0-9_-]+\.'
-        . '[a-zA-Z0-9]+(?:[_.-][a-zA-Z0-9]+)*';
+    /** @var PlmReference */
+    private $reference;
 
     public function __construct(
         Doku_Renderer $renderer,
         PlmStruct $struct,
-        PlmState $state
+        PlmState $state,
+        PlmReference $reference
     ) {
         $this->renderer = $renderer;
         $this->struct = $struct;
         $this->state = $state;
+        $this->reference = $reference;
     }
 
     /**
-     * Get a value exported by a previous PLM select.
+     * Render the PLM select.
      *
-     * Example:
+     * The select finds exactly one Struct record and
+     * renders its content.
      *
-     *     $partselect._pk
+     * The selected record is additionally stored in:
+     *
+     *     <name>.current.*
      */
-    public static function getSelectionValue(
-        string $name,
-        string $field
-    ): ?string {
-
-        if (
-            !isset(
-                self::$selections[$name]
-            )
-        ) {
-            return null;
-        }
-
-        if (
-            !array_key_exists(
-                $field,
-                self::$selections[$name]
-            )
-        ) {
-            return null;
-        }
-
-        $value =
-            self::$selections[$name][$field];
-
-        if ($value === null) {
-            return null;
-        }
-
-        return (string) $value;
-    }
-
-    /**
-     * Store the selected record for later
-     * PLM elements in the same render request.
-     */
-    private static function storeSelection(
-        string $name,
-        array $record
-    ): void {
-
-        self::$selections[$name] = [
-            PlmStruct::PRIMARY_KEY_FIELD =>
-                (string) (
-                    $record['rid'] ?? 0
-                ),
-        ];
-    }
-
     public function render(
         string $name,
         string $schema,
@@ -100,14 +43,6 @@ class PlmSelect
         string $content,
         string $errortext = 'not found!'
     ): void {
-
-        /*
-         * A new render of the same named select must
-         * replace an older value.
-         */
-        unset(
-            self::$selections[$name]
-        );
 
         if ($schema === '') {
 
@@ -127,23 +62,47 @@ class PlmSelect
             return;
         }
 
-        $filter =
-            $this->expandFilter(
-                $filter
+        /*
+         * No current Struct row exists while resolving
+         * the select filter.
+         */
+        $this->reference->clearRow();
+
+        /*
+         * Resolve request and state references.
+         *
+         * Example:
+         *
+         *     _pk=&_pk
+         *
+         * becomes:
+         *
+         *     _pk=123
+         */
+        $expandedFilter =
+            $this->reference->expand(
+                $filter,
+                true
             );
 
-        if ($filter === null) {
-
-            $text =
-                $this->expandContent(
-                    $content,
-                    null,
-                    [],
-                    $errortext
-                );
+        /*
+         * A Struct reference such as:
+         *
+         *     $field
+         *
+         * cannot be resolved before the record exists.
+         */
+        if (
+            $this->containsStructReference(
+                $expandedFilter
+            )
+        ) {
 
             $this->renderContent(
-                $text
+                $this->replaceUnresolvedWithError(
+                    $content,
+                    $errortext
+                )
             );
 
             return;
@@ -152,128 +111,228 @@ class PlmSelect
         try {
 
             /*
-             * findOne() centrally handles:
+             * findOne() is deliberately used here instead
+             * of calling search() directly.
+             *
+             * PlmStruct::findOne() knows how to handle:
              *
              *     _pk=123
+             *
+             * by forwarding it to:
+             *
+             *     findByPrimaryKey()
              */
             $record =
                 $this->struct->findOne(
                     $schema,
-                    $filter
+                    $expandedFilter
                 );
 
             if ($record === null) {
 
-                $text =
-                    $this->expandContent(
-                        $content,
-                        null,
-                        [],
-                        $errortext
-                    );
-
                 $this->renderContent(
-                    $text
+                    $this->replaceUnresolvedWithError(
+                        $content,
+                        $errortext
+                    )
                 );
 
                 return;
             }
 
-            /*
-             * Export the technical RID so a later
-             * PLM table can use:
-             *
-             *     $name._pk
-             */
-            self::storeSelection(
-                $name,
-                $record
-            );
-
             $row =
                 $record['row'];
 
+            $rid =
+                (int) (
+                    $record['rid'] ?? 0
+                );
+
             /*
-             * We need the column indexes from a
-             * normal Struct search.
+             * findOne() may return a row containing only
+             * the field used by the search.
+             *
+             * For rendering the content we need all Struct
+             * fields referenced by the content.
              */
             $fields =
                 $this->getStructFields(
-                    $filter,
+                    $expandedFilter,
                     $content
                 );
 
-            if (empty($fields)) {
-
-                $fields =
-                    array_keys(
-                        $row
-                    );
-            }
-
-            $result =
-                $this->struct->search(
-                    $schema,
-                    $fields
-                );
-
-            $search =
-                $result['search'];
-
-            $rows =
-                $result['rows'];
-
-            $fieldIndexes = [];
-
-            foreach (
-                $search->getColumns()
-                as $index => $column
-            ) {
-
-                $fieldIndexes[
-                    $column->getLabel()
-                ] =
-                    $index;
-            }
-
             /*
-             * Locate the same RID in the second result.
+             * If no explicit Struct fields are required,
+             * the row returned by findOne() is sufficient.
              */
-            $rids =
-                $search->getRids();
+            if (!empty($fields)) {
 
-            $matchedRow = null;
+                /*
+                 * IMPORTANT:
+                 *
+                 * _pk must never be passed to search().
+                 *
+                 * It is a PLM pseudo field and has already
+                 * been resolved by findOne().
+                 */
+                $fields =
+                    array_values(
+                        array_filter(
+                            $fields,
+                            function ($field) {
 
-            foreach (
-                $rows as $index => $candidate
-            ) {
+                                return
+                                    $field !==
+                                    PlmStruct::PRIMARY_KEY_FIELD;
+                            }
+                        )
+                    );
 
-                if (
-                    (int) (
-                        $rids[$index] ?? 0
-                    ) ===
-                    (int) $record['rid']
-                ) {
+                if (!empty($fields)) {
 
-                    $matchedRow =
-                        $candidate;
+                    /*
+                     * We cannot search using _pk again.
+                     *
+                     * Instead, retrieve the requested fields
+                     * without a _pk filter and select the row
+                     * with the already known RID.
+                     */
+                    $result =
+                        $this->struct->search(
+                            $schema,
+                            $fields
+                        );
 
-                    break;
+                    $search =
+                        $result['search'];
+
+                    $rows =
+                        $result['rows'];
+
+                    $rids =
+                        $search->getRids();
+
+                    $matchedRow = null;
+
+                    foreach (
+                        $rows as $index => $candidate
+                    ) {
+
+                        if (
+                            (int) (
+                                $rids[$index] ?? 0
+                            ) === $rid
+                        ) {
+
+                            $matchedRow =
+                                $candidate;
+
+                            break;
+                        }
+                    }
+
+                    if ($matchedRow !== null) {
+
+                        $row =
+                            $matchedRow;
+                    }
                 }
             }
 
-            if ($matchedRow === null) {
+            /*
+             * Build field => column index map.
+             *
+             * findOne() alone does not expose Struct
+             * column metadata, so we need a search result
+             * for that.
+             */
+            $fieldIndexes = [];
 
-                $matchedRow =
-                    $row;
+            if (!empty($fields)) {
+
+                $result =
+                    $this->struct->search(
+                        $schema,
+                        $fields
+                    );
+
+                $search =
+                    $result['search'];
+
+                foreach (
+                    $search->getColumns()
+                    as $index => $column
+                ) {
+
+                    $fieldIndexes[
+                        $column->getLabel()
+                    ] =
+                        $index;
+                }
+
+                /*
+                 * The previous search may have returned the
+                 * row in a different order. Find it again by RID.
+                 */
+                $rids =
+                    $search->getRids();
+
+                $rows =
+                    $result['rows'];
+
+                foreach (
+                    $rows as $index => $candidate
+                ) {
+
+                    if (
+                        (int) (
+                            $rids[$index] ?? 0
+                        ) === $rid
+                    ) {
+
+                        $row =
+                            $candidate;
+
+                        break;
+                    }
+                }
             }
 
+            /*
+             * Make the selected Struct row available to
+             * PlmReference.
+             *
+             * Content can now use:
+             *
+             *     $ipn
+             *     $_pk
+             *     $part._pk
+             *     %context.current.ipn
+             *     @template
+             */
+            $this->reference->setRow(
+                $row,
+                $fieldIndexes
+            );
+
+            /*
+             * Store the selected record in PLM state.
+             */
+            $this->storeCurrentState(
+                $name,
+                $row,
+                $fieldIndexes,
+                $rid
+            );
+
+            /*
+             * Expand content through the common reference
+             * resolver.
+             */
             $text =
-                $this->expandContent(
+                $this->reference->expand(
                     $content,
-                    $matchedRow,
-                    $fieldIndexes,
-                    $errortext
+                    false
                 );
 
             $this->renderContent(
@@ -282,12 +341,10 @@ class PlmSelect
 
         } catch (Throwable $e) {
 
-            /*
-             * Do not leave a stale selection behind
-             * when the select failed.
-             */
-            unset(
-                self::$selections[$name]
+            $this->reference->clearRow();
+
+            $this->state->clearContext(
+                $name
             );
 
             $this->error(
@@ -297,102 +354,93 @@ class PlmSelect
         }
     }
 
-    private function expandFilter(
-        string $filter
-    ): ?string {
+    /**
+     * Store the selected Struct row in PLM state.
+     */
+    private function storeCurrentState(
+        string $name,
+        array $row,
+        array $fieldIndexes,
+        int $rid
+    ): void {
 
-        if ($filter === '') {
-            return null;
+        $values = [];
+
+        if ($rid > 0) {
+
+            $values[
+                PlmStruct::PRIMARY_KEY_FIELD
+            ] =
+                (string) $rid;
         }
 
-        $hasEmptyParameter = false;
+        foreach (
+            $fieldIndexes as $field => $index
+        ) {
 
-        /*
-         * URI parameter:
-         *
-         *     &_pk
-         */
-        $filter =
-            preg_replace_callback(
-                '/&([a-zA-Z0-9_-]+)/',
-                function ($match)
-                    use (&$hasEmptyParameter) {
+            if (
+                !array_key_exists(
+                    $index,
+                    $row
+                )
+            ) {
+                continue;
+            }
 
-                    $value =
-                        $this->getUriParam(
-                            $match[1]
-                        );
+            $value =
+                $row[$index];
 
-                    if ($value === '') {
-                        $hasEmptyParameter = true;
-                    }
+            if ($value === null) {
+                continue;
+            }
 
-                    return $value;
-                },
-                $filter
-            );
+            if (
+                method_exists(
+                    $value,
+                    'getDisplayValue'
+                )
+            ) {
 
-        /*
-         * Existing PLM state reference:
-         *
-         *     $table.field
-         */
-        $filter =
-            preg_replace_callback(
-                '/\$(' .
-                self::STATE_PATTERN .
-                ')/',
-                function ($match)
-                    use (&$hasEmptyParameter) {
+                $display =
+                    $value->getDisplayValue();
 
-                    $reference =
-                        $match[1];
+                if (
+                    $display === null ||
+                    $display === ''
+                ) {
+                    continue;
+                }
 
-                    $parts =
-                        explode(
-                            '.',
-                            $reference,
-                            2
-                        );
+                $values[$field] =
+                    (string) $display;
 
-                    $table =
-                        $parts[0];
+                continue;
+            }
 
-                    $field =
-                        $parts[1];
+            if (is_scalar($value)) {
 
-                    $value =
-                        $this->state->getFilterValue(
-                            $table,
-                            $field
-                        );
+                $string =
+                    (string) $value;
 
-                    if ($value === '') {
-                        $hasEmptyParameter = true;
-                    }
+                if ($string !== '') {
 
-                    return $value;
-                },
-                $filter
-            );
-
-        if ($hasEmptyParameter) {
-            return null;
+                    $values[$field] =
+                        $string;
+                }
+            }
         }
 
-        return $filter;
+        $this->state->setScope(
+            $name,
+            'current',
+            $values
+        );
     }
 
-    private function getUriParam(
-        string $name
-    ): string {
-
-        global $INPUT;
-
-        return
-            $INPUT->str($name) ?? '';
-    }
-
+    /**
+     * Determine Struct fields required by the filter
+     * and content.
+     */
     private function getStructFields(
         string $filter,
         string $content
@@ -400,10 +448,14 @@ class PlmSelect
 
         $fields = [];
 
+        /*
+         * Fields used directly by the Struct filter.
+         */
         preg_match_all(
             '/(?:^|\(|\s|AND\s+|OR\s+)'
             . '('
-            . self::FIELD_PATTERN
+            . '[a-zA-Z0-9]+'
+            . '(?:[_.-][a-zA-Z0-9]+)*'
             . ')'
             . '\s*(?:=|!=|~|!~|=\*|>=|<=|>|<)/i',
             $filter,
@@ -422,33 +474,78 @@ class PlmSelect
                 continue;
             }
 
-            $fields[] =
-                $field;
+            if (
+                str_ends_with(
+                    $field,
+                    '._pk'
+                )
+            ) {
+
+                $field =
+                    substr(
+                        $field,
+                        0,
+                        -4
+                    );
+            }
+
+            if ($field !== '') {
+
+                $fields[] =
+                    $field;
+            }
         }
 
+        /*
+         * Struct references used by content.
+         *
+         *     $ipn
+         *     $_pk
+         *     $part._pk
+         */
         preg_match_all(
-            '/\$(' .
-            self::FIELD_PATTERN .
-            ')/',
+            '/\$([a-zA-Z0-9_-]+(?:\._pk)?)/',
             $content,
             $matches
         );
 
         foreach (
             $matches[1] ?? []
-            as $field
+            as $reference
         ) {
 
             if (
-                strpos(
-                    $field,
-                    '.'
-                ) === false
+                str_ends_with(
+                    $reference,
+                    '._pk'
+                )
             ) {
 
-                $fields[] =
-                    $field;
+                $field =
+                    substr(
+                        $reference,
+                        0,
+                        -4
+                    );
+
+                if ($field !== '') {
+
+                    $fields[] =
+                        $field;
+                }
+
+                continue;
             }
+
+            if (
+                $reference ===
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
+            $fields[] =
+                $reference;
         }
 
         return array_values(
@@ -458,58 +555,46 @@ class PlmSelect
         );
     }
 
-    private function expandContent(
+    /**
+     * Check for unresolved current Struct references.
+     */
+    private function containsStructReference(
+        string $text
+    ): bool {
+
+        return preg_match(
+            '/\$([a-zA-Z0-9_-]+(?:\._pk)?)/',
+            $text
+        ) === 1;
+    }
+
+    /**
+     * Replace unresolved references in content with
+     * the configured error text.
+     */
+    private function replaceUnresolvedWithError(
         string $content,
-        ?array $row,
-        array $fieldIndexes,
         string $errortext
     ): string {
 
-        return
-            preg_replace_callback(
-                '/\$(' .
-                self::FIELD_PATTERN .
-                ')/',
-                function ($match)
-                    use (
-                        $row,
-                        $fieldIndexes,
-                        $errortext
-                    ) {
+        return preg_replace_callback(
+            '/(?:&[a-zA-Z0-9_-]+'
+            . '|\$[a-zA-Z0-9_-]+(?:\._pk)?'
+            . '|%[a-zA-Z0-9_-]+'
+            . '\.[a-zA-Z0-9_-]+'
+            . '\.[a-zA-Z0-9_.-]+'
+            . '|@[a-zA-Z0-9_-]+)/',
+            function () use ($errortext) {
 
-                    $field =
-                        $match[1];
-
-                    if ($row === null) {
-                        return $errortext;
-                    }
-
-                    if (
-                        !isset(
-                            $fieldIndexes[$field]
-                        )
-                    ) {
-                        return $errortext;
-                    }
-
-                    $value =
-                        $row[
-                            $fieldIndexes[$field]
-                        ]->getDisplayValue();
-
-                    if (
-                        $value === null ||
-                        $value === ''
-                    ) {
-                        return $errortext;
-                    }
-
-                    return $value;
-                },
-                $content
-            );
+                return $errortext;
+            },
+            $content
+        );
     }
 
+    /**
+     * Render PLM content.
+     */
     private function renderContent(
         string $text
     ): void {
@@ -536,6 +621,9 @@ class PlmSelect
             $html;
     }
 
+    /**
+     * Display a technical error.
+     */
     private function error(
         string $message
     ): void {

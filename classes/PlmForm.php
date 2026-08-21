@@ -14,6 +14,9 @@ class PlmForm
     /** @var PlmState */
     private $state;
 
+    /** @var PlmReference */
+    private $reference;
+
     /**
      * True when a PLM state/request reference used by the
      * filter exists but contains no value.
@@ -35,6 +38,12 @@ class PlmForm
         $this->struct = $struct;
         $this->parser = $parser;
         $this->state = $state;
+
+        $this->reference =
+            new PlmReference(
+                $state,
+                $struct
+            );
     }
 
     /**
@@ -52,6 +61,7 @@ class PlmForm
             $this->error(
                 'PLM form: parameter "schema" is required'
             );
+
             return;
         }
 
@@ -61,19 +71,37 @@ class PlmForm
             );
 
         /*
+         * Register templates with the central
+         * reference resolver.
+         *
+         * Parser template definitions:
+         *
+         *     [
+         *         ['details', 'Details', '...'],
+         *         ['foo', 'Foo', '...'],
+         *     ]
+         *
+         * become:
+         *
+         *     [
+         *         'details' => '...',
+         *         'foo'     => '...',
+         *     ]
+         */
+        $this->reference->setTemplates(
+            $this->getTemplates(
+                $params
+            )
+        );
+
+        /*
          * Expand references in the filter.
          *
          * Supported:
          *
-         *     $table.field
-         *
-         * from PlmState
-         *
-         * and:
-         *
          *     &_pk
-         *
-         * from normal URL parameters.
+         *     %context.filter.field
+         *     %context.current.field
          */
         $filter =
             $this->expandFilter(
@@ -114,27 +142,10 @@ class PlmForm
     }
 
     /**
-     * Expand PLM filter references.
+     * Expand PLM filter references through PlmReference.
      *
-     * Supported forms:
-     *
-     *     $table.field
-     *
-     * and:
-     *
-     *     &parameter
-     *
-     * Example:
-     *
-     *     _pk=&_pk
-     *
-     * with:
-     *
-     *     ?_pk=123
-     *
-     * becomes:
-     *
-     *     _pk=123
+     * The filter value is additionally escaped because it
+     * will be passed to Struct as a filter expression.
      */
     private function expandFilter(
         string $filter
@@ -152,33 +163,35 @@ class PlmForm
         }
 
         /*
-         * ---------------------------------------------------------
-         * PLM STATE REFERENCES
-         * ---------------------------------------------------------
+         * Resolve references one by one so that we can
+         * distinguish an unresolved reference from a
+         * resolved-but-empty value.
          *
-         *     $table.field
+         * Request:
+         *
+         *     &_pk
+         *
+         * State:
+         *
+         *     %context.filter.field
+         *     %context.current.field
          */
         $filter =
             preg_replace_callback(
-                '/\$([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_.-]+)/',
+                '/&([a-zA-Z0-9_-]+)/',
                 function ($match) {
 
-                    $table =
-                        $match[1];
-
-                    $field =
-                        $match[2];
-
                     $value =
-                        $this->state->getFilterValue(
-                            $table,
-                            $field
+                        $this->reference->resolve(
+                            '&' . $match[1]
                         );
 
-                    if ($value === '') {
+                    if ($value === null || $value === '') {
 
                         $this->filterStateMissing =
                             true;
+
+                        return '';
                     }
 
                     return $this->escapeFilterValue(
@@ -193,34 +206,28 @@ class PlmForm
         }
 
         /*
-         * ---------------------------------------------------------
-         * URL PARAMETER REFERENCES
-         * ---------------------------------------------------------
+         * State references.
          *
-         *     &_pk
-         *
-         * The ampersand is PLM syntax and is removed during
-         * expansion.
-         *
-         * We deliberately only accept simple URL parameter names.
+         *     %context.scope.field
          */
         $filter =
             preg_replace_callback(
-                '/&([a-zA-Z0-9_-]+)/',
+                '/%([a-zA-Z0-9_-]+'
+                . '\.[a-zA-Z0-9_-]+'
+                . '\.[a-zA-Z0-9_-]+)/',
                 function ($match) {
 
-                    $parameter =
-                        $match[1];
-
                     $value =
-                        $this->state->getRequestValue(
-                            $parameter
+                        $this->reference->resolve(
+                            '%' . $match[1]
                         );
 
-                    if ($value === '') {
+                    if ($value === null || $value === '') {
 
                         $this->filterStateMissing =
                             true;
+
+                        return '';
                     }
 
                     return $this->escapeFilterValue(
@@ -234,7 +241,7 @@ class PlmForm
             return null;
         }
 
-        return $filter;
+        return trim($filter);
     }
 
     /**
@@ -261,6 +268,64 @@ class PlmForm
             ],
             $value
         );
+    }
+
+    /**
+     * Get all templates configured for this form.
+     *
+     * Template definitions are parser entries:
+     *
+     *     [
+     *         'details',
+     *         'Details',
+     *         'intern:plm:details:$category:$part._pk'
+     *     ]
+     *
+     * PlmReference only needs the template name and
+     * template text.
+     */
+    private function getTemplates(
+        array $params
+    ): array {
+
+        $templates = [];
+
+        foreach (
+            $params['template'] ?? []
+            as $definition
+        ) {
+
+            if (!is_array($definition)) {
+                continue;
+            }
+
+            if (empty($definition[0])) {
+                continue;
+            }
+
+            $name =
+                trim(
+                    (string) $definition[0]
+                );
+
+            if ($name === '') {
+                continue;
+            }
+
+            $text =
+                implode(
+                    ' ',
+                    array_slice(
+                        $definition,
+                        2
+                    )
+                );
+
+            $templates[$name] =
+                $text;
+        }
+
+        return $templates;
     }
 
     /**
@@ -341,6 +406,7 @@ class PlmForm
                 ],
                 true
             )) {
+
                 throw new \InvalidArgumentException(
                     'Unknown PLM action: ' .
                     $action
@@ -518,16 +584,6 @@ class PlmForm
 
         /*
          * Store the already expanded filter.
-         *
-         * Important:
-         *
-         *     _pk=&_pk
-         *
-         * has become:
-         *
-         *     _pk=123
-         *
-         * before it reaches the POST handler.
          */
         if ($filter !== null) {
 
@@ -684,11 +740,23 @@ class PlmForm
                     $definition['redirect'] !== ''
                 ) {
 
+                    /*
+                     * Redirects may themselves contain
+                     * PLM references/templates.
+                     *
+                     * At this point there is no current
+                     * Struct row attached to the reference
+                     * resolver, so only request/state/template
+                     * references can be resolved here.
+                     */
+                    $redirect =
+                        $this->reference->expand(
+                            $definition['redirect']
+                        );
+
                     $html .=
                         ' data-plm-redirect="' .
-                        hsc(
-                            $definition['redirect']
-                        ) .
+                        hsc($redirect) .
                         '"';
                 }
 
@@ -727,6 +795,11 @@ class PlmForm
 
         foreach ($actions as $definition) {
 
+            $redirect =
+                $this->reference->expand(
+                    $definition['redirect']
+                );
+
             $html .=
                 '<input type="hidden" ' .
                 'name="plm_redirects[' .
@@ -735,7 +808,7 @@ class PlmForm
                 ) .
                 ']" value="' .
                 hsc(
-                    $definition['redirect']
+                    $redirect
                 ) .
                 '">';
         }

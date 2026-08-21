@@ -9,6 +9,20 @@ class PlmState
 
     /**
      * Internal state.
+     *
+     * Structure:
+     *
+     *     [
+     *         'mycontext' => [
+     *             'filter' => [
+     *                 'ipn' => '123',
+     *             ],
+     *             'current' => [
+     *                 '_pk' => '42',
+     *                 'ipn' => '123',
+     *             ],
+     *         ],
+     *     ]
      */
     private array $state = [];
 
@@ -87,193 +101,484 @@ class PlmState
     }
 
     /**
-     * Get all filters for a component.
+     * Get one context.
      *
      * Example:
      *
-     *     $state->getFilter('tablecompanies')
+     *     $state->getContext('mycontext')
      *
      * returns:
      *
      *     [
-     *         'name' => 'Anycubic',
+     *         'filter' => [
+     *             'ipn' => '123',
+     *         ],
+     *         'current' => [
+     *             '_pk' => '42',
+     *             'ipn' => '123',
+     *         ],
      *     ]
      */
-    public function getFilter(
-        string $name
+    public function getContext(
+        string $context
     ): array {
-        return
-            $this->state['filter'][$name]
+
+        if (!$this->isValidName($context)) {
+            return [];
+        }
+
+        $value =
+            $this->state[$context]
             ?? [];
+
+        return is_array($value)
+            ? $value
+            : [];
     }
 
     /**
-     * Get one filter value.
+     * Get one scope from a context.
+     *
+     * Example:
+     *
+     *     $state->getScope(
+     *         'mycontext',
+     *         'filter'
+     *     );
      */
-    public function getFilterValue(
-        string $name,
-        string $field
-    ): string {
+    public function getScope(
+        string $context,
+        string $scope
+    ): array {
+
+        if (
+            !$this->isValidName($context) ||
+            !$this->isValidName($scope)
+        ) {
+            return [];
+        }
 
         $value =
-            $this->state['filter'][$name][$field]
-            ?? '';
+            $this->state[$context][$scope]
+            ?? [];
+
+        return is_array($value)
+            ? $value
+            : [];
+    }
+
+    /**
+     * Get one state value.
+     *
+     * The state hierarchy is:
+     *
+     *     context.scope.field
+     *
+     * Example:
+     *
+     *     $state->getValue(
+     *         'mycontext',
+     *         'current',
+     *         'ipn'
+     *     );
+     */
+    public function getValue(
+        string $context,
+        string $scope,
+        string $field
+    ): ?string {
+
+        if (
+            !$this->isValidName($context) ||
+            !$this->isValidName($scope) ||
+            !$this->isValidName($field)
+        ) {
+            return null;
+        }
+
+        if (
+            !isset(
+                $this->state[$context][$scope]
+            ) ||
+            !is_array(
+                $this->state[$context][$scope]
+            )
+        ) {
+            return null;
+        }
+
+        if (
+            !array_key_exists(
+                $field,
+                $this->state[$context][$scope]
+            )
+        ) {
+            return null;
+        }
+
+        $value =
+            $this->state[$context][$scope][$field];
 
         if ($value === null) {
-            return '';
+            return null;
+        }
+
+        if (
+            is_array($value) ||
+            is_object($value)
+        ) {
+            return null;
         }
 
         return (string) $value;
     }
 
     /**
-     * Set one filter value.
+     * Set one state value.
      *
      * Empty values are removed.
      */
-    public function setFilterValue(
-        string $name,
+    public function setValue(
+        string $context,
+        string $scope,
         string $field,
         string $value
     ): void {
 
+        if (
+            !$this->isValidName($context) ||
+            !$this->isValidName($scope) ||
+            !$this->isValidName($field)
+        ) {
+            return;
+        }
+
         if ($value === '') {
 
-            $this->clearFilterValue(
-                $name,
+            $this->clearValue(
+                $context,
+                $scope,
                 $field
             );
 
             return;
         }
 
-        if (!isset(
-            $this->state['filter']
-        )) {
-            $this->state['filter'] = [];
+        if (
+            !isset(
+                $this->state[$context]
+            ) ||
+            !is_array(
+                $this->state[$context]
+            )
+        ) {
+            $this->state[$context] = [];
         }
 
-        if (!isset(
-            $this->state['filter'][$name]
-        )) {
-            $this->state['filter'][$name] = [];
+        if (
+            !isset(
+                $this->state[$context][$scope]
+            ) ||
+            !is_array(
+                $this->state[$context][$scope]
+            )
+        ) {
+            $this->state[$context][$scope] = [];
         }
 
-        $this->state['filter'][$name][$field] =
+        $this->state[$context][$scope][$field] =
             $value;
     }
 
     /**
-     * Clear one filter value.
+     * Clear one state value.
      */
-    public function clearFilterValue(
-        string $name,
+    public function clearValue(
+        string $context,
+        string $scope,
         string $field
     ): void {
 
         if (
+            !$this->isValidName($context) ||
+            !$this->isValidName($scope) ||
+            !$this->isValidName($field)
+        ) {
+            return;
+        }
+
+        if (
             !isset(
-                $this->state['filter'][$name][$field]
+                $this->state[$context][$scope]
+            ) ||
+            !is_array(
+                $this->state[$context][$scope]
             )
         ) {
             return;
         }
 
         unset(
-            $this->state['filter'][$name][$field]
+            $this->state[$context][$scope][$field]
         );
 
         /*
-         * Remove empty component.
+         * Remove empty scope.
          */
         if (
             empty(
-                $this->state['filter'][$name]
+                $this->state[$context][$scope]
             )
         ) {
             unset(
-                $this->state['filter'][$name]
+                $this->state[$context][$scope]
             );
         }
 
         /*
-         * Remove empty filter section.
+         * Remove empty context.
          */
         if (
             empty(
-                $this->state['filter']
+                $this->state[$context]
             )
         ) {
             unset(
-                $this->state['filter']
+                $this->state[$context]
             );
         }
     }
 
     /**
-     * Get a normal URL parameter.
+     * Replace an entire scope.
      *
-     * This is used by PLM filter references such as:
+     * This is useful for current-row state.
      *
-     *     _pk=&_pk
+     * Example:
      *
-     * The value is read from the current request and is
-     * deliberately kept separate from the encoded PLM state.
+     *     $state->setScope(
+     *         'mycontext',
+     *         'current',
+     *         [
+     *             '_pk' => '42',
+     *             'ipn' => '123',
+     *             'name' => 'Part A',
+     *         ]
+     *     );
      */
-    public function getRequestValue(
-        string $name
-    ): string {
+    public function setScope(
+        string $context,
+        string $scope,
+        array $values
+    ): void {
 
         if (
-            $name === '' ||
-            !preg_match(
-                '/^[a-zA-Z0-9_-]+$/',
-                $name
-            )
+            !$this->isValidName($context) ||
+            !$this->isValidName($scope)
         ) {
-            return '';
+            return;
         }
 
-        global $INPUT;
+        $clean = [];
 
-        /*
-         * Normal DokuWiki request.
-         */
-        if (
-            isset($INPUT) &&
-            is_object($INPUT) &&
-            isset($INPUT->get)
+        foreach (
+            $values as $field => $value
         ) {
-            try {
 
-                $value =
-                    $INPUT->get->str(
-                        $name
-                    );
+            if (
+                !is_string($field) ||
+                !$this->isValidName($field)
+            ) {
+                continue;
+            }
 
-                if ($value !== null) {
-                    return (string) $value;
+            if (
+                $value === null ||
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
+            $value =
+                (string) $value;
+
+            if ($value === '') {
+                continue;
+            }
+
+            $clean[$field] =
+                $value;
+        }
+
+        if (empty($clean)) {
+
+            $this->clearScope(
+                $context,
+                $scope
+            );
+
+            return;
+        }
+
+        if (
+            !isset(
+                $this->state[$context]
+            ) ||
+            !is_array(
+                $this->state[$context]
+            )
+        ) {
+            $this->state[$context] = [];
+        }
+
+        $this->state[$context][$scope] =
+            $clean;
+    }
+
+    /**
+     * Clear an entire scope.
+     */
+    public function clearScope(
+        string $context,
+        string $scope
+    ): void {
+
+        if (
+            !$this->isValidName($context) ||
+            !$this->isValidName($scope)
+        ) {
+            return;
+        }
+
+        if (
+            !isset(
+                $this->state[$context]
+            ) ||
+            !is_array(
+                $this->state[$context]
+            )
+        ) {
+            return;
+        }
+
+        unset(
+            $this->state[$context][$scope]
+        );
+
+        if (
+            empty(
+                $this->state[$context]
+            )
+        ) {
+            unset(
+                $this->state[$context]
+            );
+        }
+    }
+
+    /**
+     * Replace an entire context.
+     *
+     * Example:
+     *
+     *     $state->setContext(
+     *         'mycontext',
+     *         [
+     *             'filter' => [
+     *                 'ipn' => '123',
+     *             ],
+     *             'current' => [
+     *                 '_pk' => '42',
+     *             ],
+     *         ]
+     *     );
+     */
+    public function setContext(
+        string $context,
+        array $scopes
+    ): void {
+
+        if (
+            !$this->isValidName($context)
+        ) {
+            return;
+        }
+
+        $clean = [];
+
+        foreach (
+            $scopes as $scope => $values
+        ) {
+
+            if (
+                !is_string($scope) ||
+                !$this->isValidName($scope) ||
+                !is_array($values)
+            ) {
+                continue;
+            }
+
+            foreach (
+                $values as $field => $value
+            ) {
+
+                if (
+                    !is_string($field) ||
+                    !$this->isValidName($field)
+                ) {
+                    continue;
                 }
 
-            } catch (Throwable $e) {
-                /*
-                 * Fall through to $_GET.
-                 */
+                if (
+                    $value === null ||
+                    is_array($value) ||
+                    is_object($value)
+                ) {
+                    continue;
+                }
+
+                $value =
+                    (string) $value;
+
+                if ($value === '') {
+                    continue;
+                }
+
+                $clean[$scope][$field] =
+                    $value;
             }
         }
 
-        /*
-         * PHP fallback.
-         */
-        if (
-            isset($_GET[$name]) &&
-            !is_array($_GET[$name]) &&
-            !is_object($_GET[$name])
-        ) {
-            return (string) $_GET[$name];
+        if (empty($clean)) {
+
+            $this->clearContext(
+                $context
+            );
+
+            return;
         }
 
-        return '';
+        $this->state[$context] =
+            $clean;
+    }
+
+    /**
+     * Clear an entire context.
+     */
+    public function clearContext(
+        string $context
+    ): void {
+
+        if (
+            !$this->isValidName($context)
+        ) {
+            return;
+        }
+
+        unset(
+            $this->state[$context]
+        );
     }
 
     /**
@@ -361,7 +666,85 @@ class PlmState
             return;
         }
 
+        /*
+         * Only accept the new:
+         *
+         *     context.scope.field
+         *
+         * structure.
+         *
+         * Invalid/non-array context values are ignored.
+         */
+        $clean = [];
+
+        foreach (
+            $state as $context => $scopes
+        ) {
+
+            if (
+                !is_string($context) ||
+                !$this->isValidName($context) ||
+                !is_array($scopes)
+            ) {
+                continue;
+            }
+
+            foreach (
+                $scopes as $scope => $values
+            ) {
+
+                if (
+                    !is_string($scope) ||
+                    !$this->isValidName($scope) ||
+                    !is_array($values)
+                ) {
+                    continue;
+                }
+
+                foreach (
+                    $values as $field => $value
+                ) {
+
+                    if (
+                        !is_string($field) ||
+                        !$this->isValidName($field)
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        $value === null ||
+                        is_array($value) ||
+                        is_object($value)
+                    ) {
+                        continue;
+                    }
+
+                    $clean[$context][$scope][$field] =
+                        (string) $value;
+                }
+            }
+        }
+
         $this->state =
-            $state;
+            $clean;
+    }
+
+    /**
+     * Validate a context, scope or field name.
+     *
+     * Dots are deliberately forbidden here because they
+     * separate:
+     *
+     *     context.scope.field
+     */
+    private function isValidName(
+        string $name
+    ): bool {
+
+        return preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $name
+        ) === 1;
     }
 }

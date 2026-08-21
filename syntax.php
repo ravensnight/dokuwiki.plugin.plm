@@ -3,6 +3,7 @@
 require_once __DIR__ . '/classes/PlmParser.php';
 require_once __DIR__ . '/classes/PlmStruct.php';
 require_once __DIR__ . '/classes/PlmState.php';
+require_once __DIR__ . '/classes/PlmReference.php';
 require_once __DIR__ . '/classes/PlmTable.php';
 require_once __DIR__ . '/classes/PlmForm.php';
 require_once __DIR__ . '/classes/PlmSelect.php';
@@ -229,32 +230,37 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             $schema =
                 $definition['schema'];
 
-            /*
-             * Resolve URI parameters before handing
-             * the filter to any PLM component.
-             *
-             * Example:
-             *
-             *     _pk=&_pk
-             *
-             * becomes:
-             *
-             *     _pk=123
-             */
             $filter =
-                $this->expandUriParameters(
-                    $definition['filter']
-                );
+                $definition['filter'];
 
             $errortext =
                 $definition['errortext'];
 
+            /*
+             * A single PlmReference instance is shared by
+             * the PLM component.
+             *
+             * It is responsible for resolving:
+             *
+             *     &_pk
+             *     $field
+             *     $_pk
+             *     $lookup._pk
+             *     %context.scope.field
+             *     @template
+             */
+            $struct =
+                new PlmStruct();
+
+            $reference =
+                new PlmReference(
+                    $state,
+                    $struct
+                );
+
             switch ($type) {
 
                 case 'table':
-
-                    $struct =
-                        new PlmStruct();
 
                     $parser =
                         new PlmParser();
@@ -279,9 +285,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                 case 'form':
 
-                    $struct =
-                        new PlmStruct();
-
                     $parser =
                         new PlmParser();
 
@@ -305,14 +308,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                 case 'select':
 
-                    $struct =
-                        new PlmStruct();
-
                     $select =
                         new PlmSelect(
                             $renderer,
                             $struct,
-                            $state
+                            $state,
+                            $reference
                         );
 
                     $select->render(
@@ -346,85 +347,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
             return true;
         }
-    }
-
-    /**
-     * Resolve references to current URI parameters.
-     *
-     * Example:
-     *
-     *     _pk=&_pk
-     *
-     * with:
-     *
-     *     ?_pk=123
-     *
-     * becomes:
-     *
-     *     _pk=123
-     */
-    private function expandUriParameters(
-        string $filter
-    ): string {
-
-        if ($filter === '') {
-            return '';
-        }
-
-        global $INPUT;
-
-        return
-            preg_replace_callback(
-                '/&([a-zA-Z0-9_-]+)/',
-                function ($match) use ($INPUT) {
-
-                    $parameter =
-                        $match[1];
-
-                    if (
-                        !isset($INPUT) ||
-                        $INPUT === null ||
-                        !isset($INPUT->get)
-                    ) {
-                        return '';
-                    }
-
-                    $value =
-                        $INPUT->get->str(
-                            $parameter
-                        );
-
-                    if (
-                        $value === null
-                    ) {
-                        return '';
-                    }
-
-                    /*
-                     * Escape characters which have
-                     * special meaning in Struct filters.
-                     */
-                    return
-                        str_replace(
-                            [
-                                '\\',
-                                '*',
-                                '~',
-                                '[',
-                                ']',
-                            ],
-                            [
-                                '\\\\',
-                                '\\*',
-                                '\\~',
-                                '\\[',
-                                '\\]',
-                            ],
-                            (string) $value
-                        );
-                },
-                $filter
-            );
     }
 
     private function parseHeader(

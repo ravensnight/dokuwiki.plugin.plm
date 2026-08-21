@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/classes/PlmStruct.php';
 require_once __DIR__ . '/classes/PlmState.php';
+require_once __DIR__ . '/classes/PlmReference.php';
 
 class action_plugin_plm extends DokuWiki_Action_Plugin
 {
@@ -104,6 +105,24 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             return;
         }
 
+        if ($tableAction === 'details') {
+
+            try {
+
+                $this->processTableDetails();
+
+            } catch (Throwable $e) {
+
+                msg(
+                    'PLM table: ' .
+                    $e->getMessage(),
+                    -1
+                );
+            }
+
+            return;
+        }
+
         /*
          * ---------------------------------------------------------
          * PLM FORM
@@ -136,6 +155,12 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
      * -------------------------------------------------------------
      * TABLE FILTER
      * -------------------------------------------------------------
+     *
+     * Store filters as:
+     *
+     *     context.filter.field
+     *
+     * The table name is used as the context.
      */
     private function processTableFilter(): void
     {
@@ -154,20 +179,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 )
             );
 
-        if ($table === '') {
-            throw new \RuntimeException(
-                'No PLM table specified.'
-            );
-        }
-
-        if (!preg_match(
-            '/^[a-zA-Z0-9_-]+$/',
+        $this->validateTableContext(
             $table
-        )) {
-            throw new \RuntimeException(
-                'Invalid PLM table name.'
-            );
-        }
+        );
 
         $filters =
             $INPUT->post->arr(
@@ -181,6 +195,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $state =
             new PlmState();
 
+        $values = [];
+
         foreach (
             $filters as $field => $value
         ) {
@@ -189,10 +205,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
-            if (!preg_match(
-                '/^[a-zA-Z0-9_.-]+$/',
-                $field
-            )) {
+            if (!$this->isValidStateName($field)) {
                 continue;
             }
 
@@ -203,12 +216,22 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
-            $state->setFilterValue(
-                $table,
-                $field,
-                (string) $value
-            );
+            $value =
+                (string) $value;
+
+            if ($value === '') {
+                continue;
+            }
+
+            $values[$field] =
+                $value;
         }
+
+        $state->setScope(
+            $table,
+            'filter',
+            $values
+        );
 
         $encoded =
             $state->encode();
@@ -267,20 +290,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 )
             );
 
-        if ($table === '') {
-            throw new \RuntimeException(
-                'No PLM table specified.'
-            );
-        }
-
-        if (!preg_match(
-            '/^[a-zA-Z0-9_-]+$/',
+        $this->validateTableContext(
             $table
-        )) {
-            throw new \RuntimeException(
-                'Invalid PLM table name.'
-            );
-        }
+        );
 
         $schema =
             trim(
@@ -336,23 +348,20 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
-            if (!preg_match(
-                '/^[a-zA-Z0-9_.-]+$/',
-                $field
-            )) {
-                continue;
-            }
-
-            if (
-                is_array($value) ||
-                is_object($value)
-            ) {
+            if (!$this->isValidStructField($field)) {
                 continue;
             }
 
             if (
                 $field ===
                 PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
+            if (
+                is_array($value) ||
+                is_object($value)
             ) {
                 continue;
             }
@@ -371,33 +380,25 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $access
             );
 
-        $redirects =
-            $INPUT->post->arr(
-                'plm_redirects'
-            );
-
-        if (!is_array($redirects)) {
-            $redirects = [];
+        /*
+         * The newly created RID is not necessarily part of
+         * the returned data array.
+         */
+        if (
+            method_exists(
+                $access,
+                'getRid'
+            )
+        ) {
+            $data[
+                PlmStruct::PRIMARY_KEY_FIELD
+            ] =
+                $access->getRid();
         }
 
-        $target =
-            trim(
-                $redirects['create'] ?? ''
-            );
-
-        if ($target === '') {
-            $target =
-                $ID;
-        }
-
-        $target =
-            $this->expandRedirectTarget(
-                $target,
-                $data
-            );
-
-        $this->sendTargetRedirect(
-            $target,
+        $this->redirect(
+            'create',
+            $data,
             $ID
         );
     }
@@ -424,20 +425,9 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 )
             );
 
-        if ($table === '') {
-            throw new \RuntimeException(
-                'No PLM table specified.'
-            );
-        }
-
-        if (!preg_match(
-            '/^[a-zA-Z0-9_-]+$/',
+        $this->validateTableContext(
             $table
-        )) {
-            throw new \RuntimeException(
-                'Invalid PLM table name.'
-            );
-        }
+        );
 
         $schema =
             trim(
@@ -486,8 +476,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         if (
             $deleteField !==
             PlmStruct::PRIMARY_KEY_FIELD &&
-            !preg_match(
-                '/^[a-zA-Z0-9_.-]+$/',
+            !$this->isValidStructField(
                 $deleteField
             )
         ) {
@@ -573,6 +562,181 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $access
         );
 
+        $this->redirect(
+            'delete',
+            $data,
+            $ID
+        );
+    }
+
+    /**
+     * -------------------------------------------------------------
+     * TABLE DETAILS
+     * -------------------------------------------------------------
+     *
+     * Open a configured details target for the current
+     * Struct row.
+     */
+    private function processTableDetails(): void
+    {
+        global $INPUT, $ID;
+
+        if (!checkSecurityToken()) {
+            throw new \RuntimeException(
+                'Invalid security token.'
+            );
+        }
+
+        $table =
+            trim(
+                $INPUT->post->str(
+                    'plm_table'
+                )
+            );
+
+        $this->validateTableContext(
+            $table
+        );
+
+        $schema =
+            trim(
+                $INPUT->post->str(
+                    'plm_schema'
+                )
+            );
+
+        if ($schema === '') {
+            throw new \RuntimeException(
+                'No PLM schema specified.'
+            );
+        }
+
+        $posted =
+            $INPUT->post->arr(
+                'plm_details'
+            );
+
+        if (!is_array($posted)) {
+            throw new \RuntimeException(
+                'No PLM details row specified.'
+            );
+        }
+
+        $struct =
+            new PlmStruct();
+
+        $rid =
+            $posted[
+                PlmStruct::PRIMARY_KEY_FIELD
+            ] ?? '';
+
+        if (
+            is_array($rid) ||
+            is_object($rid)
+        ) {
+            throw new \RuntimeException(
+                'Invalid PLM details primary key.'
+            );
+        }
+
+        $rid =
+            trim(
+                (string) $rid
+            );
+
+        if ($rid === '') {
+            throw new \RuntimeException(
+                'PLM details requires a primary key.'
+            );
+        }
+
+        $record =
+            $struct->findOne(
+                $schema,
+                PlmStruct::PRIMARY_KEY_FIELD .
+                '=' .
+                $this->escapeStructFilterValue(
+                    $rid
+                )
+            );
+
+        if ($record === null) {
+            throw new \RuntimeException(
+                'No Struct record found for the given details row.'
+            );
+        }
+
+        $access =
+            $struct->getAccessForRecord(
+                $schema,
+                $record['pid'],
+                $record['rid']
+            );
+
+        $data =
+            $struct->getDataArray(
+                $access
+            );
+
+        /*
+         * Always use the authoritative RID returned by Struct.
+         */
+        $data[
+            PlmStruct::PRIMARY_KEY_FIELD
+        ] =
+            $record['rid'];
+
+        /*
+         * Store the complete current row in PLM state.
+         */
+        $state =
+            new PlmState();
+
+        $current = [];
+
+        foreach (
+            $data as $field => $value
+        ) {
+
+            if (!is_string($field)) {
+                continue;
+            }
+
+            if (
+                !$this->isValidStructField(
+                    $field
+                ) &&
+                $field !==
+                PlmStruct::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
+            if (
+                $value === null ||
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
+            $value =
+                (string) $value;
+
+            if ($value === '') {
+                continue;
+            }
+
+            $current[$field] =
+                $value;
+        }
+
+        $state->setScope(
+            $table,
+            'current',
+            $current
+        );
+
         $redirects =
             $INPUT->post->arr(
                 'plm_redirects'
@@ -584,23 +748,121 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
         $target =
             trim(
-                $redirects['delete'] ?? ''
+                $redirects['details'] ?? ''
             );
 
         if ($target === '') {
-            $target =
-                $ID;
+            throw new \RuntimeException(
+                'No PLM details redirect specified.'
+            );
         }
 
-        $target =
-            $this->expandRedirectTarget(
-                $target,
-                $data
+        /*
+         * Details has a real Struct record available.
+         *
+         * Resolve normal current-row references through
+         * PlmReference. The state remains available for
+         * %table.current.field references.
+         */
+        $reference =
+            new PlmReference(
+                $state,
+                $struct
             );
 
-        $this->sendTargetRedirect(
+        $this->setReferenceRowFromRecord(
+            $reference,
+            $struct,
+            $schema,
+            $record
+        );
+
+        $target =
+            $reference->expand(
+                $target,
+                false
+            );
+
+        $this->sendTargetRedirectWithState(
             $target,
-            $ID
+            $ID,
+            $state
+        );
+    }
+
+    /**
+     * Set the current Struct row on a reference resolver.
+     *
+     * This obtains the Struct column indexes through a normal
+     * Struct search and then locates the authoritative RID.
+     */
+    private function setReferenceRowFromRecord(
+        PlmReference $reference,
+        PlmStruct $struct,
+        string $schema,
+        array $record
+    ): void {
+
+        $result =
+            $struct->search(
+                $schema,
+                []
+            );
+
+        $search =
+            $result['search'];
+
+        $rows =
+            $result['rows'];
+
+        $fieldIndexes = [];
+
+        foreach (
+            $search->getColumns()
+            as $index => $column
+        ) {
+            $fieldIndexes[
+                $column->getLabel()
+            ] =
+                $index;
+        }
+
+        $rids =
+            $search->getRids();
+
+        $matchedRow = null;
+
+        foreach (
+            $rows as $index => $row
+        ) {
+
+            if (
+                (int) (
+                    $rids[$index] ?? 0
+                ) ===
+                (int) $record['rid']
+            ) {
+                $matchedRow =
+                    $row;
+
+                break;
+            }
+        }
+
+        /*
+         * If the full search did not expose the row,
+         * leave the resolver without a physical row.
+         *
+         * State references still work independently.
+         */
+        if ($matchedRow === null) {
+            $reference->clearRow();
+            return;
+        }
+
+        $reference->setRow(
+            $matchedRow,
+            $fieldIndexes
         );
     }
 
@@ -628,46 +890,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             ],
             $value
         );
-    }
-
-    /**
-     * Expand $field references in a redirect.
-     */
-    private function expandRedirectTarget(
-        string $target,
-        array $data
-    ): string {
-
-        return
-            preg_replace_callback(
-                '/\$([a-zA-Z_][a-zA-Z0-9_-]*)/',
-                function ($match) use ($data) {
-
-                    $field =
-                        $match[1];
-
-                    if (!array_key_exists(
-                        $field,
-                        $data
-                    )) {
-                        return '';
-                    }
-
-                    $value =
-                        $data[$field];
-
-                    if (is_array($value)) {
-
-                        return implode(
-                            ',',
-                            $value
-                        );
-                    }
-
-                    return (string) $value;
-                },
-                $target
-            );
     }
 
     /**
@@ -722,20 +944,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * This is the IMPORTANT part:
-         *
-         * PlmForm has already expanded:
-         *
-         *     _pk=&_pk
-         *
-         * into:
-         *
-         *     _pk=123
-         *
-         * Therefore the POST handler does not need to know
-         * anything about URL references.
-         */
         $filter =
             trim(
                 $INPUT->post->str(
@@ -837,12 +1045,22 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                     continue;
                 }
 
-                if ($field === '_pk') {
+                if (
+                    $field ===
+                    PlmStruct::PRIMARY_KEY_FIELD
+                ) {
+                    continue;
+                }
+
+                if (
+                    is_array($value) ||
+                    is_object($value)
+                ) {
                     continue;
                 }
 
                 $data[$field] =
-                    $value;
+                    (string) $value;
             }
 
             $struct->save(
@@ -854,6 +1072,18 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $struct->getDataArray(
                     $access
                 );
+
+            if (
+                method_exists(
+                    $access,
+                    'getRid'
+                )
+            ) {
+                $data[
+                    PlmStruct::PRIMARY_KEY_FIELD
+                ] =
+                    $access->getRid();
+            }
 
             $this->redirect(
                 $action,
@@ -877,14 +1107,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             );
         }
 
-        /*
-         * All existing-record actions use the central
-         * PlmStruct lookup.
-         *
-         * This includes:
-         *
-         *     _pk=123
-         */
         $record =
             $struct->findOne(
                 $schema,
@@ -963,9 +1185,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
-            /*
-             * _pk is technical/read-only.
-             */
             if (
                 $field ===
                 PlmStruct::PRIMARY_KEY_FIELD
@@ -973,8 +1192,15 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 continue;
             }
 
+            if (
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
             $data[$field] =
-                $value;
+                (string) $value;
         }
 
         $struct->save(
@@ -987,10 +1213,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $access
             );
 
-        /*
-         * Make the technical RID available to
-         * redirect placeholders.
-         */
         $data[
             PlmStruct::PRIMARY_KEY_FIELD
         ] =
@@ -1004,7 +1226,15 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
     }
 
     /**
-     * Redirect using submitted form values.
+     * Redirect from a normal PLM form.
+     *
+     * Submitted form values are exposed through a temporary
+     * PLM state context:
+     *
+     *     __redirect.current.field
+     *
+     * The target is then expanded centrally through
+     * PlmReference.
      */
     private function redirectForm(
         array $posted,
@@ -1022,53 +1252,238 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 $defaultTarget;
         }
 
-        preg_match_all(
-            '/\$([a-zA-Z_][a-zA-Z0-9_-]*)/',
-            $target,
-            $matches
-        );
+        $state =
+            new PlmState();
 
-        $referencedFields =
-            array_values(
-                array_unique(
-                    $matches[1] ?? []
-                )
-            );
+        $values = [];
 
-        if (!empty($referencedFields)) {
+        foreach (
+            $posted as $field => $value
+        ) {
 
-            foreach (
-                $referencedFields as $field
-            ) {
-
-                $value =
-                    $posted[$field] ?? '';
-
-                $value =
-                    $this->stringifyFormValue(
-                        $value
-                    );
-
-                $target =
-                    str_replace(
-                        '$' . $field,
-                        rawurlencode($value),
-                        $target
-                    );
+            if (!is_string($field)) {
+                continue;
             }
 
-            $this->sendTargetRedirect(
-                $target,
-                $defaultTarget
+            if (!$this->isValidStructField($field)) {
+                continue;
+            }
+
+            $values[$field] =
+                $this->stringifyFormValue(
+                    $value
+                );
+        }
+
+        $state->setScope(
+            '__redirect',
+            'current',
+            $values
+        );
+
+        /*
+         * Convert legacy/current form references:
+         *
+         *     $field
+         *
+         * into the central state syntax:
+         *
+         *     %__redirect.current.field
+         *
+         * This keeps all actual reference expansion inside
+         * PlmReference.
+         */
+        $target =
+            $this->convertFormReferences(
+                $target
             );
 
-            return;
+        $reference =
+            new PlmReference(
+                $state,
+                new PlmStruct()
+            );
+
+        $target =
+            $reference->expand(
+                $target,
+                false
+            );
+
+        $this->sendTargetRedirect(
+            $target,
+            $defaultTarget
+        );
+    }
+
+    /**
+     * Convert legacy $field references to the temporary
+     * redirect state context.
+     */
+    private function convertFormReferences(
+        string $target
+    ): string {
+
+        return
+            preg_replace_callback(
+                '/\$([a-zA-Z0-9_-]+(?:\._pk)?)/',
+                function ($match) {
+
+                    return
+                        '%__redirect.current.' .
+                        $match[1];
+                },
+                $target
+            );
+    }
+
+    /**
+     * Convert a submitted form value to a string.
+     */
+    private function stringifyFormValue(
+        $value
+    ): string {
+
+        if (is_array($value)) {
+
+            $values = [];
+
+            foreach ($value as $item) {
+
+                if (is_array($item)) {
+
+                    $values[] =
+                        implode(
+                            ',',
+                            array_map(
+                                'strval',
+                                $item
+                            )
+                        );
+
+                } else {
+
+                    $values[] =
+                        (string) $item;
+                }
+            }
+
+            return implode(
+                ',',
+                $values
+            );
+        }
+
+        if ($value === null) {
+            return '';
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * Redirect after CREATE / UPDATE / DELETE.
+     *
+     * Struct data is exposed through the same temporary
+     * PLM state context used by form redirects.
+     *
+     * Example:
+     *
+     *     $ipn
+     *
+     * is internally resolved through:
+     *
+     *     %__redirect.current.ipn
+     *
+     * and therefore ultimately by PlmReference.
+     */
+    private function redirect(
+        string $action,
+        array $data,
+        string $defaultTarget
+    ): void {
+
+        global $INPUT;
+
+        $redirects =
+            $INPUT->post->arr(
+                'plm_redirects'
+            );
+
+        if (!is_array($redirects)) {
+            $redirects = [];
         }
 
         $target =
-            $this->appendFormParameters(
+            trim(
+                $redirects[$action] ?? ''
+            );
+
+        if ($target === '') {
+            $target =
+                $defaultTarget;
+        }
+
+        $state =
+            new PlmState();
+
+        $values = [];
+
+        foreach (
+            $data as $field => $value
+        ) {
+
+            if (!is_string($field)) {
+                continue;
+            }
+
+            if (
+                $field !==
+                PlmStruct::PRIMARY_KEY_FIELD &&
+                !$this->isValidStructField(
+                    $field
+                )
+            ) {
+                continue;
+            }
+
+            if (
+                $value === null ||
+                is_array($value) ||
+                is_object($value)
+            ) {
+                continue;
+            }
+
+            $values[$field] =
+                (string) $value;
+        }
+
+        $state->setScope(
+            '__redirect',
+            'current',
+            $values
+        );
+
+        /*
+         * Route all normal $field references through the
+         * central resolver.
+         */
+        $target =
+            $this->convertFormReferences(
+                $target
+            );
+
+        $reference =
+            new PlmReference(
+                $state,
+                new PlmStruct()
+            );
+
+        $target =
+            $reference->expand(
                 $target,
-                $posted
+                false
             );
 
         $this->sendTargetRedirect(
@@ -1079,6 +1494,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
 
     /**
      * Append form parameters to a redirect.
+     *
+     * Retained for compatibility with existing PLM forms.
      */
     private function appendFormParameters(
         string $target,
@@ -1149,116 +1566,6 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 '&',
                 PHP_QUERY_RFC3986
             );
-    }
-
-    /**
-     * Convert a submitted form value to a string.
-     */
-    private function stringifyFormValue(
-        $value
-    ): string {
-
-        if (is_array($value)) {
-
-            $values = [];
-
-            foreach ($value as $item) {
-
-                if (is_array($item)) {
-
-                    $values[] =
-                        implode(
-                            ',',
-                            array_map(
-                                'strval',
-                                $item
-                            )
-                        );
-
-                } else {
-
-                    $values[] =
-                        (string) $item;
-                }
-            }
-
-            return implode(
-                ',',
-                $values
-            );
-        }
-
-        if ($value === null) {
-            return '';
-        }
-
-        return (string) $value;
-    }
-
-    /**
-     * Redirect after CREATE / UPDATE / DELETE.
-     */
-    private function redirect(
-        string $action,
-        array $data,
-        string $defaultTarget
-    ): void {
-
-        global $INPUT;
-
-        $redirects =
-            $INPUT->post->arr(
-                'plm_redirects'
-            );
-
-        if (!is_array($redirects)) {
-            $redirects = [];
-        }
-
-        $target =
-            trim(
-                $redirects[$action] ?? ''
-            );
-
-        if ($target === '') {
-            $target =
-                $defaultTarget;
-        }
-
-        $target =
-            preg_replace_callback(
-                '/\$([a-zA-Z_][a-zA-Z0-9_-]*)/',
-                function ($match) use ($data) {
-
-                    $field =
-                        $match[1];
-
-                    if (!array_key_exists(
-                        $field,
-                        $data
-                    )) {
-                        return '';
-                    }
-
-                    $value =
-                        $data[$field];
-
-                    if (is_array($value)) {
-                        return implode(
-                            ',',
-                            $value
-                        );
-                    }
-
-                    return (string) $value;
-                },
-                $target
-            );
-
-        $this->sendTargetRedirect(
-            $target,
-            $defaultTarget
-        );
     }
 
     /**
@@ -1343,5 +1650,148 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         send_redirect(
             $url
         );
+
+        exit;
+    }
+
+    /**
+     * Redirect while preserving the current PLM state.
+     */
+    private function sendTargetRedirectWithState(
+        string $target,
+        string $defaultTarget,
+        PlmState $state
+    ): void {
+
+        $target =
+            trim(
+                $target
+            );
+
+        if ($target === '') {
+            $target =
+                $defaultTarget;
+        }
+
+        $parts =
+            explode(
+                '?',
+                $target,
+                2
+            );
+
+        $page =
+            cleanID(
+                trim(
+                    $parts[0]
+                )
+            );
+
+        $query =
+            $parts[1] ?? '';
+
+        if ($page === '') {
+
+            $fallbackParts =
+                explode(
+                    '?',
+                    $defaultTarget,
+                    2
+                );
+
+            $page =
+                cleanID(
+                    trim(
+                        $fallbackParts[0]
+                    )
+                );
+
+            $query =
+                $fallbackParts[1] ?? '';
+        }
+
+        $params = [];
+
+        if ($query !== '') {
+
+            parse_str(
+                $query,
+                $params
+            );
+
+            if (!is_array($params)) {
+                $params = [];
+            }
+        }
+
+        /*
+         * Preserve the complete PLM state.
+         */
+        $encoded =
+            $state->encode();
+
+        if ($encoded !== '') {
+            $params['plm'] =
+                $encoded;
+        }
+
+        $url =
+            wl(
+                $page,
+                $params,
+                true
+            );
+
+        send_redirect(
+            $url
+        );
+
+        exit;
+    }
+
+    /**
+     * Validate a Table context name.
+     */
+    private function validateTableContext(
+        string $table
+    ): void {
+
+        if ($table === '') {
+            throw new \RuntimeException(
+                'No PLM table specified.'
+            );
+        }
+
+        if (!$this->isValidStateName($table)) {
+            throw new \RuntimeException(
+                'Invalid PLM table name.'
+            );
+        }
+    }
+
+    /**
+     * Validate a State context/scope/field name.
+     */
+    private function isValidStateName(
+        string $name
+    ): bool {
+
+        return preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $name
+        ) === 1;
+    }
+
+    /**
+     * Validate a Struct field name.
+     */
+    private function isValidStructField(
+        string $field
+    ): bool {
+
+        return preg_match(
+            '/^[a-zA-Z0-9_-]+$/',
+            $field
+        ) === 1;
     }
 }
