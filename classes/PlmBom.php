@@ -24,8 +24,7 @@
  *     variants -> plm_product_variant.variant_id
  */
 
-class PlmBom
-{
+class PlmBom {
     /** @var PlmStruct */
     private $struct;
 
@@ -183,32 +182,24 @@ class PlmBom
     private function renderVariantData(
         array $variant
     ): string {
-        $html = '<div class="plm-bom-variant-data">';
 
+        $html = '<ul class="plm-bom-variant-data">';
+
+        $html .= $this->renderAttribute("Product", hsc($productId));
+        
         $html .= $this->renderFieldIfPresent(
-            $variant,
-            'variant_id',
-            'Variant'
+            $variant, 'variant_id', 'Variant'
         );
 
         $productId = $this->getLookupDisplayValue(
             $variant['product_id'] ?? null
         );
 
-        if ($productId !== '') {
-            $html .= '<div>';
-            $html .= '<strong>Product:</strong> ';
-            $html .= hsc($productId);
-            $html .= '</div>';
-        }
-
         $html .= $this->renderFieldIfPresent(
-            $variant,
-            'description',
-            'Description'
+            $variant, 'description', 'Description'
         );
 
-        $html .= '</div>';
+        $html .= '</ul>';
 
         return $html;
     }
@@ -250,15 +241,9 @@ class PlmBom
             );
         }
 
-        $version = $this->findVersion(
-            $versionId
-        );
-
+        $version = $this->findVersion($versionId);
         if ($version === null) {
             return '<div class="plm-bom-node plm-bom-missing"'
-                . ' style="margin-left:'
-                . (20 * $level)
-                . 'px">'
                 . '<h3>'
                 . ($number !== ''
                     ? hsc($number) . ' '
@@ -276,16 +261,10 @@ class PlmBom
          * part in plm_part_version is a Lookup to
          * plm_part.ipn.
          */
-        $partId = $this->getLookupDisplayValue(
-            $version['part'] ?? null
-        );
-
+        $partId = $this->getLookupDisplayValue($version['part'] ?? null);
         $part = null;
-
         if ($partId !== '') {
-            $part = $this->findPart(
-                $partId
-            );
+            $part = $this->findPart($partId);
         }
 
         /*
@@ -312,13 +291,7 @@ class PlmBom
             $title .= ' — ' . $description;
         }
 
-        $html = '<div class="plm-bom-node"'
-            . ' style="margin-left:'
-            . (20 * $level)
-            . 'px">';
-
-        $html .= '<div class="plm-bom-part">';
-
+        $html = '<div class="plm-bom-node plm-bom-level' . $level . '" >';
         $html .= '<h3>';
 
         if ($number !== '') {
@@ -328,27 +301,14 @@ class PlmBom
         $html .= hsc($title);
         $html .= '</h3>';
 
-        $html .= $this->renderQuantity(
-            $quantity
-        );
+        /** Item data */
+        $html .= $this->renderQuantity($quantity);
 
-        $html .= '</div>';
+        /* Part data. */
+        $html .= $this->renderPartData($part,$partId);
 
-        /*
-         * Part data.
-         */
-        $html .= $this->renderPartData(
-            $part,
-            $partId
-        );
-
-        /*
-         * Version data.
-         */
-        $html .= $this->renderVersionData(
-            $version,
-            $versionId
-        );
+        /* Version data. */
+        $html .= $this->renderVersionData($version,$versionId);
 
         /*
          * Data stored directly on the BOM relationship.
@@ -426,6 +386,19 @@ class PlmBom
         return $html;
     }
 
+    private function renderAttribute($name, $value) {        
+        $html = '<li class="plm-bom-node-attr" >';
+        $html .= '<span class="plm-bom-node-attr-key" >';
+        $html .= $name;
+        $html .= '</span>';
+        $html .= '<span class="plm-bom-node-attr-value" >';
+        $html .= empty($value) ? 'n/a' : $value;
+        $html .= '</span>';
+        $html .= '</li>';
+
+        return $html;
+    }
+
     /**
      * Render information from a BOM relationship row.
      *
@@ -433,59 +406,27 @@ class PlmBom
      *
      * @return string
      */
-    private function renderSourceItemData(
-        ?array $item
-    ): string {
+    private function renderSourceItemData(?array $item ): string {
         if ($item === null) {
             return '';
         }
 
-        $designators = $this->getFieldValue(
-            $item,
-            'designators'
-        );
-
+        $designators = $this->getFieldValue($item,'designators');
+        
         $variantValues = [];
-
-        if (array_key_exists(
-            'variants',
-            $item
-        )) {
+        if (array_key_exists('variants',$item)) {
             $variantValues =
                 $this->getLookupDisplayValues(
                     $item['variants']
                 );
         }
 
-        if (
-            $designators === ''
-            && !$variantValues
-        ) {
-            return '';
-        }
+        $html = '<ul class="plm-bom-node-attrlist">';
 
-        $html = '<div class="plm-bom-item-data">';
+        $html .= $this->renderAttribute("Designators:", hsc($designators));
+        $html .= $this->renderAttribute("Variants:", hsc(implode(', ',$variantValues)));
 
-        if ($designators !== '') {
-            $html .= '<div>';
-            $html .= '<strong>Designators:</strong> ';
-            $html .= hsc($designators);
-            $html .= '</div>';
-        }
-
-        if ($variantValues) {
-            $html .= '<div>';
-            $html .= '<strong>Variants:</strong> ';
-            $html .= hsc(
-                implode(
-                    ', ',
-                    $variantValues
-                )
-            );
-            $html .= '</div>';
-        }
-
-        $html .= '</div>';
+        $html .= '</ul>';
 
         return $html;
     }
@@ -502,42 +443,30 @@ class PlmBom
         ?array $part,
         string $partId
     ): string {
-        if (
-            $part === null
-            && $partId === ''
-        ) {
+        if ( $part === null && $partId === '' ) {
             return '';
         }
 
-        $html = '<div class="plm-bom-part-data">';
+        $html = '<ul class="plm-bom-node-attrlist" >';
 
         if ($part !== null) {
             $html .= $this->renderFieldIfPresent(
-                $part,
-                'ipn',
-                'IPN'
+                $part, 'ipn', 'IPN:'
             );
 
             $html .= $this->renderFieldIfPresent(
-                $part,
-                'description',
-                'Description'
+                $part, 'description', 'Description:'
             );
 
             $html .= $this->renderFieldIfPresent(
-                $part,
-                'category',
-                'Category'
+                $part, 'category', 'Category:'
             );
-        } elseif ($partId !== '') {
-            $html .= '<div>';
-            $html .= '<strong>IPN:</strong> ';
-            $html .= hsc($partId);
-            $html .= '</div>';
-        }
+        } 
+        else {
+            $html .= $this->renderAttribute("IPN:", $partId);
+        }        
 
-        $html .= '</div>';
-
+        $html .= "</ul>";
         return $html;
     }
 
@@ -553,27 +482,18 @@ class PlmBom
         array $version,
         string $versionId
     ): string {
-        $html = '<div class="plm-bom-version-data">';
-
-        $html .= '<div>';
-        $html .= '<strong>Version:</strong> ';
-        $html .= hsc($versionId);
-        $html .= '</div>';
+        $html = '<ul class="plm-bom-node-attrlist" >';
+        $html .= $this->renderAttribute("Version:", hsc($versionId));
 
         $html .= $this->renderFieldIfPresent(
-            $version,
-            'revision',
-            'Revision'
+            $version, 'revision', 'Revision:'
         );
 
         $html .= $this->renderFieldIfPresent(
-            $version,
-            'status',
-            'Status'
+            $version, 'status', 'Status:'
         );
 
-        $html .= '</div>';
-
+        $html .= "</ul>";
         return $html;
     }
 
@@ -591,21 +511,9 @@ class PlmBom
         string $field,
         string $label
     ): string {
-        $value = $this->getFieldValue(
-            $row,
-            $field
-        );
 
-        if ($value === '') {
-            return '';
-        }
-
-        return '<div>'
-            . '<strong>'
-            . hsc($label)
-            . ':</strong> '
-            . hsc($value)
-            . '</div>';
+        $value = $this->getFieldValue( $row, $field );
+        return $this->renderAttribute( $label, $value );
     }
 
     /**
@@ -648,10 +556,11 @@ class PlmBom
             $value = (string) $quantity;
         }
 
-        return '<span class="plm-bom-quantity">'
-            . '<strong>Qty:</strong> '
-            . hsc($value)
-            . '</span>';
+        $html = '<ul class="plm-bom-node-attrlist" >';
+        $html .= $this->renderAttribute("Quantity:", hsc($value));
+        $html .= '</ul>';
+
+        return $html;
     }
 
     /**
@@ -668,6 +577,7 @@ class PlmBom
         $quantity,
         int $level
     ): string {
+
         return '<div class="plm-bom-node plm-bom-cycle"'
             . ' style="margin-left:'
             . (20 * $level)
