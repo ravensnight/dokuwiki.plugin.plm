@@ -133,6 +133,15 @@ class PlmBom
 
         $html .= '<div class="plm-bom-tree">';
 
+        /*
+         * Number the first BOM level:
+         *
+         *   1. Part A
+         *   2. Part B
+         *   3. Part C
+         */
+        $rootNumber = 0;
+
         foreach ($roots as $root) {
             $versionId = $this->getLookupDisplayValue(
                 $root['version_id'] ?? null
@@ -141,6 +150,8 @@ class PlmBom
             if ($versionId === '') {
                 continue;
             }
+
+            $rootNumber++;
 
             $quantity = $this->getQuantity(
                 $root
@@ -151,7 +162,8 @@ class PlmBom
                 $quantity,
                 0,
                 [],
-                $root
+                $root,
+                (string) $rootNumber
             );
         }
 
@@ -209,6 +221,7 @@ class PlmBom
      * @param int        $level
      * @param array      $path
      * @param array|null $sourceItem
+     * @param string     $number
      *
      * @return string
      */
@@ -217,7 +230,8 @@ class PlmBom
         $quantity,
         int $level,
         array $path,
-        ?array $sourceItem = null
+        ?array $sourceItem = null,
+        string $number = ''
     ): string {
         $versionId = trim($versionId);
 
@@ -246,6 +260,9 @@ class PlmBom
                 . (20 * $level)
                 . 'px">'
                 . '<h3>'
+                . ($number !== ''
+                    ? hsc($number) . ' '
+                    : '')
                 . hsc($versionId)
                 . '</h3>'
                 . '<div class="plm-bom-error-text">'
@@ -274,7 +291,7 @@ class PlmBom
         /*
          * Part heading:
          *
-         *   IPN — Description
+         *   1.1 IPN — Description
          *
          * The part itself is always the main heading.
          */
@@ -303,6 +320,11 @@ class PlmBom
         $html .= '<div class="plm-bom-part">';
 
         $html .= '<h3>';
+
+        if ($number !== '') {
+            $html .= hsc($number) . ' ';
+        }
+
         $html .= hsc($title);
         $html .= '</h3>';
 
@@ -342,21 +364,33 @@ class PlmBom
         $nextPath[$versionId] = true;
 
         /*
-         * Find children by parent_version_id Lookup RID.
+         * Find children by parent_version_id Lookup.
          */
         $children = $this->findChildItems(
             $version
         );
 
+        /*
+         * Number only children that actually apply to
+         * the selected product variant.
+         *
+         * Example:
+         *
+         *   1.2 Parent
+         *       1.2.1 Child A
+         *       1.2.2 Child B
+         */
+        $childNumber = 0;
+
         foreach ($children as $child) {
             $applies = $this->itemAppliesToVariant(
-                    $child,
-                    $this->variantId
-                );
+                $child,
+                $this->variantId
+            );
 
             if (!$applies) {
                 continue;
-            }            
+            }
 
             $childVersionId =
                 $this->getLookupDisplayValue(
@@ -367,16 +401,23 @@ class PlmBom
                 continue;
             }
 
+            $childNumber++;
+
             $childQuantity = $this->getQuantity(
                 $child
             );
+
+            $childItemNumber = $number !== ''
+                ? $number . '.' . $childNumber
+                : (string) $childNumber;
 
             $html .= $this->renderVersionNode(
                 $childVersionId,
                 $childQuantity,
                 $level + 1,
                 $nextPath,
-                $child
+                $child,
+                $childItemNumber
             );
         }
 
@@ -705,11 +746,11 @@ class PlmBom
         }
 
         /*
-        * Preserve the Struct RID.
-        *
-        * This is needed because plm_product_variant_item.variant_id
-        * references this record via Lookup.
-        */
+         * Preserve the Struct RID.
+         *
+         * This is needed because plm_product_variant_item.variant_id
+         * references this record via Lookup.
+         */
         if (isset($result['_pk'])) {
             $row['_pk'] = $result['_pk'];
         } elseif (isset($result['rid'])) {
@@ -750,7 +791,7 @@ class PlmBom
             ]
         );
 
-       $rows = $this->extractRows(
+        $rows = $this->extractRows(
             $result,
             [
                 'variant_id',
@@ -930,7 +971,7 @@ class PlmBom
             if (array_key_exists($index, $rawRow)) {
                 $row[$field] = $rawRow[$index];
             }
-        }        
+        }
 
         if (isset($result['_pk'])) {
             $row['_pk'] = $result['_pk'];
@@ -1000,7 +1041,7 @@ class PlmBom
                 'designators',
                 'variants',
             ]
-        );        
+        );
 
         if (!$rows) {
             $this->itemsCache[$parentVersionId] = [];
@@ -1042,6 +1083,7 @@ class PlmBom
      * Empty variants means "all variants".
      *
      * @param array $item
+     * @param string $variantId
      *
      * @return bool
      */
@@ -1052,9 +1094,9 @@ class PlmBom
         $variants = $item['variants'] ?? null;
 
         /*
-        * Empty Multi-Value Lookup means:
-        * this item applies to all product variants.
-        */
+         * Empty Multi-Value Lookup means:
+         * this item applies to all product variants.
+         */
         if (
             $variants === null ||
             $variants === ''
@@ -1063,8 +1105,8 @@ class PlmBom
         }
 
         /*
-        * First try the human-readable Lookup values.
-        */
+         * First try the human-readable Lookup values.
+         */
         $variantValues = $this->getLookupDisplayValues(
             $variants
         );
@@ -1079,9 +1121,9 @@ class PlmBom
         }
 
         /*
-        * Fallback:
-        * compare the referenced Struct RIDs.
-        */
+         * Fallback:
+         * compare the referenced Struct RIDs.
+         */
         $selectedVariant = $this->findProductVariant(
             $variantId
         );
@@ -1189,7 +1231,9 @@ class PlmBom
                         return true;
                     }
                 } catch (\Throwable $e) {
-                    // Fall through.
+                    /*
+                     * Fall through.
+                     */
                 }
             }
 
@@ -1505,10 +1549,12 @@ class PlmBom
      * Extract rows from PlmStruct::search().
      *
      * @param mixed $result
+     * @param array $fields
      *
      * @return array
      */
-    private function extractRows($result, array $fields): array {
+    private function extractRows($result, array $fields): array
+    {
         if (
             !is_array($result)
             || !isset($result['rows'])
