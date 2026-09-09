@@ -683,22 +683,48 @@ class PlmStruct
             return null;
         }
 
-        $firstColumn =
-            reset(
-                $schemaColumns
-            );
+        /*
+        * Request the COMPLETE Struct row.
+        */
+        $fields = [];
 
-        if ($firstColumn === false) {
-            return null;
+        foreach (
+            $schemaColumns as $column
+        ) {
+
+            if (
+                !is_object($column) ||
+                !method_exists(
+                    $column,
+                    'getLabel'
+                )
+            ) {
+                continue;
+            }
+
+            $field =
+                $column->getLabel();
+
+            if (
+                !is_string($field) ||
+                $field === '' ||
+                $field === self::PRIMARY_KEY_FIELD
+            ) {
+                continue;
+            }
+
+            $fields[] =
+                $field;
         }
 
-        $field =
-            $firstColumn->getLabel();
+        if (empty($fields)) {
+            return null;
+        }
 
         $result =
             $this->search(
                 $schema,
-                [$field]
+                $fields
             );
 
         $search =
@@ -726,6 +752,15 @@ class PlmStruct
                 continue;
             }
 
+            $fieldIndexes = [];
+
+            foreach (
+                $fields as $fieldIndex => $field
+            ) {
+                $fieldIndexes[$field] =
+                    $fieldIndex;
+            }
+
             return [
                 'row' =>
                     $row,
@@ -738,12 +773,14 @@ class PlmStruct
 
                 '_pk' =>
                     $rid,
+
+                'fieldIndexes' =>
+                    $fieldIndexes,
             ];
         }
 
         return null;
     }
-
     /**
      * Determine whether a Struct Column is a Lookup.
      */

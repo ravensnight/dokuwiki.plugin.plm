@@ -922,20 +922,10 @@ class PlmTable
             }
         }
 
-        if (
-            isset($params['delete']) &&
-            is_string($params['delete'])
-        ) {
-
-            if (
-                $params['delete'] !==
-                PlmStruct::PRIMARY_KEY_FIELD
-            ) {
-
-                $fields[] =
-                    $params['delete'];
-            }
-        }
+        /*
+         * Delete no longer references a Struct field.
+         * The current row RID is used directly.
+         */
 
         /*
          * Template references are resolved by PlmReference.
@@ -1017,6 +1007,12 @@ class PlmTable
      * Store the values of the current row in:
      *
      *     context.current.*
+     *
+     * The current row is deliberately selected only once
+     * per table render. An existing valid current RID from
+     * the PLM state is preserved. This prevents the last
+     * rendered row from overwriting the row selected by
+     * the user.
      */
     private function storeCurrentRow(
         string $context,
@@ -1109,15 +1105,65 @@ class PlmTable
                 $params
             );
 
-        $deleteField =
-            $this->getDeleteField(
+        $deleteLabel =
+            $this->getDeleteLabel(
+                $params
+            );
+
+        $details =
+            $this->getDetails(
                 $params
             );
 
         $hasActions =
             !empty($filterFields) ||
             !empty($createFields) ||
-            $deleteField !== null;
+            $deleteLabel !== null ||
+            $details !== null;
+
+        /*
+         * Determine which row is currently selected.
+         *
+         * If the state already contains a current RID and
+         * that RID is still part of the current result set,
+         * preserve it.
+         *
+         * Otherwise the first available row becomes current.
+         *
+         * This is important because the table may contain
+         * several rows. The old implementation stored every
+         * row as current while rendering, which meant that
+         * the last row always overwrote the user's selection.
+         */
+        $rids =
+            $search->getRids();
+
+        $currentRidValue =
+            $this->state->getValue(
+                $name,
+                'current',
+                PlmStruct::PRIMARY_KEY_FIELD
+            );
+
+        $currentRid =
+            $currentRidValue !== ''
+                ? (int) $currentRidValue
+                : 0;
+
+        if (
+            $currentRid <= 0 ||
+            !in_array(
+                $currentRid,
+                $rids,
+                true
+            )
+        ) {
+
+            $currentRid =
+                !empty($rids)
+                    ? (int) $rids[0]
+                    : 0;
+        }
 
         if ($hasActions) {
 
@@ -1151,6 +1197,27 @@ class PlmTable
                 hsc(
                     getSecurityToken()
                 ) .
+                '">';
+        }
+
+        if ($deleteLabel !== null) {
+
+            $this->renderer->doc .=
+                '<input type="hidden" ' .
+                'name="plm_delete[_pk]" ' .
+                'value="">';
+        }
+
+        if ($details !== null) {
+
+            $this->renderer->doc .=
+                '<input type="hidden" ' .
+                'name="plm_details[_pk]" ' .
+                'value="">' .
+                '<input type="hidden" ' .
+                'name="plm_redirects[details]" ' .
+                'value="' .
+                hsc($details['target']) .
                 '">';
         }
 
@@ -1266,9 +1333,6 @@ class PlmTable
             );
         }
 
-        $rids =
-            $search->getRids();
-
         foreach ($rows as $rowIndex => $row) {
 
             $rid =
@@ -1279,22 +1343,31 @@ class PlmTable
             /*
              * Make the current row and its RID
              * available to PlmReference.
+             *
+             * IMPORTANT:
+             *
+             * Do this only for the selected row.
+             * Otherwise each rendered row would overwrite
+             * context.current and the last row would always
+             * become the current row.
              */
-            $this->reference->setRow(
-                $row,
-                $fieldIndexes,
-                $rid
-            );
+            if (
+                $rid === $currentRid
+            ) {
 
-            /*
-             * Keep the state model in sync.
-             */
-            $this->storeCurrentRow(
-                $name,
-                $row,
-                $fieldIndexes,
-                $rid
-            );
+                $this->reference->setRow(
+                    $row,
+                    $fieldIndexes,
+                    $rid
+                );
+
+                $this->storeCurrentRow(
+                    $name,
+                    $row,
+                    $fieldIndexes,
+                    $rid
+                );
+            }
 
             $this->renderer->tablerow_open();
 
@@ -1308,6 +1381,20 @@ class PlmTable
                         '@'
                     )
                 ) {
+
+                    /*
+                     * Template references may be used
+                     * independently of the current row.
+                     *
+                     * For row-specific templates the
+                     * reference resolver receives the row
+                     * immediately below.
+                     */
+                    $this->reference->setRow(
+                        $row,
+                        $fieldIndexes,
+                        $rid
+                    );
 
                     $expanded =
                         $this->reference->expand(
@@ -1361,48 +1448,38 @@ class PlmTable
 
                 $this->renderer->tablecell_open();
 
-                if ($deleteField !== null) {
+                if ($deleteLabel !== null) {
 
-                    $deleteValue =
-                        '';
+                    $deleteRid =
+                        hsc((string) $rid);
 
-                    if (
-                        $deleteField ===
-                        PlmStruct::PRIMARY_KEY_FIELD
-                    ) {
+                    $this->renderer->doc .=
+                        '<button type="submit" ' .
+                        'name="plm_action" ' .
+                        'value="delete" ' .
+                        'class="plm_table_delete_button" ' .
+                        'onclick="this.form.elements[\'plm_delete[_pk]\'].value=\'' .
+                        $deleteRid .
+                        '\';">' .
+                        hsc($deleteLabel) .
+                        '</button>';
+                }
 
-                        $deleteValue =
-                            (string) $rid;
+                if ($details !== null) {
 
-                    } elseif (
-                        isset(
-                            $fieldIndexes[$deleteField]
-                        )
-                    ) {
+                    $detailsRid =
+                        hsc((string) $rid);
 
-                        $deleteValue =
-                            $row[
-                                $fieldIndexes[$deleteField]
-                            ]->getDisplayValue();
-                    }
-
-                    if ($deleteValue !== '') {
-
-                        $this->renderer->doc .=
-                            '<button type="submit" ' .
-                            'name="plm_action" ' .
-                            'value="delete" ' .
-                            'class="plm_table_delete_button">' .
-                            hsc('Delete') .
-                            '</button>' .
-                            '<input type="hidden" ' .
-                            'name="plm_delete[' .
-                            hsc($deleteField) .
-                            ']" ' .
-                            'value="' .
-                            hsc($deleteValue) .
-                            '">';
-                    }
+                    $this->renderer->doc .=
+                        '<button type="submit" ' .
+                        'name="plm_action" ' .
+                        'value="details" ' .
+                        'class="plm_table_details_button" ' .
+                        'onclick="this.form.elements[\'plm_details[_pk]\'].value=\'' .
+                        $detailsRid .
+                        '\';">' .
+                        hsc($details['label']) .
+                        '</button>';
                 }
 
                 $this->renderer->tablecell_close();
@@ -1495,7 +1572,47 @@ class PlmTable
         );
     }
 
-    private function getDeleteField(
+    private function getDetails(
+        array $params
+    ): ?array {
+
+        if (
+            !isset($params['details']) ||
+            !is_array($params['details'])
+        ) {
+            return null;
+        }
+
+        $details =
+            array_values(
+                $params['details']
+            );
+
+        if (count($details) !== 2) {
+            return null;
+        }
+
+        $label =
+            trim(
+                (string) $details[0]
+            );
+
+        $target =
+            trim(
+                (string) $details[1]
+            );
+
+        if ($label === '' || $target === '') {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'target' => $target,
+        ];
+    }
+
+    private function getDeleteLabel(
         array $params
     ): ?string {
 
@@ -1506,27 +1623,16 @@ class PlmTable
             return null;
         }
 
-        $field =
+        $label =
             trim(
                 $params['delete']
             );
 
-        if ($field === '') {
+        if ($label === '') {
             return null;
         }
 
-        if (
-            $field !==
-            PlmStruct::PRIMARY_KEY_FIELD &&
-            !preg_match(
-                '/^[a-zA-Z0-9_.-]+$/',
-                $field
-            )
-        ) {
-            return null;
-        }
-
-        return $field;
+        return $label;
     }
 
     private function getConfiguredFields(
@@ -1580,7 +1686,7 @@ class PlmTable
     /**
      * Render the create row.
      *
-     * Create fields use the actual Struct column type.
+     * Create fields use the actual Struct type.
      *
      * This is important for:
      *
@@ -1900,7 +2006,6 @@ class PlmTable
             if ($value[$i] === '(') {
                 $depth++;
             } elseif ($value[$i] === ')') {
-
                 $depth--;
 
                 if (

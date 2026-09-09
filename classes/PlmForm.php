@@ -85,7 +85,7 @@ class PlmForm
          *
          *     [
          *         'details' => '...',
-         *         'foo'     => '...',
+         *         'foo'     => '...'
          *     ]
          */
         $this->reference->setTemplates(
@@ -103,6 +103,9 @@ class PlmForm
          *     %context.filter.field
          *     %context.current.field
          */
+        $originalFilter =
+            $filter;
+
         $filter =
             $this->expandFilter(
                 $filter
@@ -603,6 +606,29 @@ class PlmForm
 
         $html .=
             ob_get_clean();
+
+        /*
+         * Preserve the complete PLM state across
+         * the form POST.
+         *
+         * The state is normally present in the current
+         * page URL as ?plm=...
+         *
+         * It has to be copied into the POST because the
+         * form action itself intentionally points to the
+         * current page without the PLM state parameter.
+         */
+        $state =
+            $this->state->encode();
+
+        if ($state !== '') {
+
+            $html .=
+                '<input type="hidden" ' .
+                'name="plm" value="' .
+                hsc($state) .
+                '">';
+        }
 
         $hasExplicitFields =
             !empty($fields);

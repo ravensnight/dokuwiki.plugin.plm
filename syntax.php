@@ -7,6 +7,7 @@ require_once __DIR__ . '/classes/PlmReference.php';
 require_once __DIR__ . '/classes/PlmTable.php';
 require_once __DIR__ . '/classes/PlmForm.php';
 require_once __DIR__ . '/classes/PlmSelect.php';
+require_once __DIR__ . '/classes/PlmBom.php';
 
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 {
@@ -205,6 +206,43 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
         try {
 
+            /*
+             * -----------------------------------------------------
+             * BOM
+             * -----------------------------------------------------
+             *
+             * Syntax:
+             *
+             *     /plm:bom > MC1210F-BLACK
+             *
+             * The value after ">" is the variant_id.
+             */
+            if (
+                preg_match(
+                    '/^bom\s*>\s*([a-zA-Z0-9_-]+)\s*$/i',
+                    trim($header),
+                    $bomMatch
+                )
+            ) {
+
+                $struct =
+                    new PlmStruct();
+
+                $bom =
+                    new PlmBom(
+                        $struct,
+                        $bomMatch[1]
+                    );
+
+                $renderer->doc .=
+                    $bom->render();
+
+                return true;
+            }
+
+            /*
+             * Everything else uses the normal PLM header syntax.
+             */
             $definition =
                 $this->parseHeader(
                     $header

@@ -15,7 +15,7 @@ class PlmSelect
     private $reference;
 
     /**
-     * True when a PLM state/request reference used by the
+     * True when a PLM State/request reference used by the
      * filter exists but contains no value.
      */
     private bool $filterStateMissing = false;
@@ -40,31 +40,33 @@ class PlmSelect
     /**
      * Render a PLM select.
      *
-     * The select:
+     * Syntax:
      *
-     *  1. resolves the filter through PlmReference
-     *  2. therefore uses PlmState / request references
-     *  3. finds exactly one Struct record through PlmStruct
-     *  4. attaches the Struct row to PlmReference
-     *  5. stores the selected record in PlmState
-     *  6. expands the content through PlmReference
-     *
-     * Example:
-     *
-     *     /plm:select > view |
-     *         plm_companies
-     *         _pk=%tablecompanies.current._pk
-     *         "<not found>"
+     *     /plm:select > view | plm_companies[_pk=%tablecompanies.current._pk] "<not found>"
+     *     __Change : $name
      *     /plm
      *
-     * Content may contain:
+     * Semantics:
+     *
+     *     view
+     *         PLM State context in which the selected record is stored.
+     *
+     *     plm_companies
+     *         Struct schema to search.
+     *
+     *     _pk=%tablecompanies.current._pk
+     *         Struct filter. PLM references inside the filter are
+     *         resolved before the Struct search.
      *
      *     $name
-     *     $description
-     *     $_pk
-     *     $part._pk
-     *     %other.current.value
-     *     @template
+     *         Field from the Struct record found by the search.
+     *
+     * The selected record is:
+     *
+     *     1. found through PlmStruct
+     *     2. attached as current Struct row to PlmReference
+     *     3. stored as <context>.current in PlmState
+     *     4. used to expand the select content
      */
     public function render(
         string $name,
@@ -73,6 +75,15 @@ class PlmSelect
         string $content,
         string $errortext = 'not found!'
     ): void {
+
+        if ($name === '') {
+
+            $this->error(
+                'PLM select: context is required'
+            );
+
+            return;
+        }
 
         if ($schema === '') {
 
@@ -95,29 +106,28 @@ class PlmSelect
         try {
 
             /*
-             * Select must not inherit a previous Struct row
-             * while resolving its filter.
+             * The select must resolve its filter without
+             * inheriting a previous Struct row.
              *
-             * This is important because the filter itself
-             * may use PLM State:
+             * Example:
              *
              *     %tablecompanies.current._pk
              *
-             * State resolution is independent from the
-             * current Struct row.
+             * must come from PLM State, not from the Struct
+             * row currently attached to PlmReference.
              */
             $this->reference->clearRow();
 
             /*
-             * Resolve the filter exactly like PlmForm does.
+             * Resolve PLM references inside the filter.
              *
-             * This resolves:
+             * Example:
              *
-             *     &_pk
-             *     %context.filter.field
-             *     %context.current.field
+             *     _pk=%tablecompanies.current._pk
              *
-             * through PlmReference.
+             * becomes:
+             *
+             *     _pk=123
              */
             $expandedFilter =
                 $this->expandFilter(
@@ -125,8 +135,8 @@ class PlmSelect
                 );
 
             /*
-             * A missing State/request value means that there
-             * cannot be a matching record.
+             * A missing referenced value means there can be
+             * no valid Struct record to select.
              */
             if ($this->filterStateMissing) {
 
@@ -150,12 +160,9 @@ class PlmSelect
             }
 
             /*
-             * Find the record.
+             * PlmStruct owns the actual Struct lookup.
              *
-             * From this point onward PlmStruct is the only
-             * component responsible for Struct lookup.
-             *
-             * No SearchConfig is created by PlmSelect.
+             * _pk is handled by PlmStruct::findByPrimaryKey().
              */
             $record =
                 $this->struct->findOne(
@@ -195,34 +202,31 @@ class PlmSelect
             }
 
             /*
-             * Build the field => column-index mapping from
-             * the Struct SearchConfig that produced the row.
+             * PlmStruct already provides the field => row-index
+             * mapping together with the returned record.
              *
-             * PlmStruct::findOne() deliberately returns only
-             * the row itself, therefore we obtain the columns
-             * through the same schema definition.
-             *
-             * The important point is that this is NOT used
-             * to perform another search.
+             * This is important for records found through
+             * findByPrimaryKey(), because those records do not
+             * contain a SearchConfig object.
              */
             $fieldIndexes =
                 $this->getFieldIndexes(
-                    $schema,
+                    $record,
                     $row
                 );
 
             /*
-             * Make the found Struct row current.
+             * Attach the found Struct record as the current
+             * Struct row.
              *
-             * From this point:
+             * This is what makes:
              *
              *     $name
              *     $description
-             *     $type
              *     $_pk
              *     $lookup._pk
              *
-             * are resolved by PlmReference.
+             * available to PlmReference.
              */
             $this->reference->setRow(
                 $row,
@@ -231,12 +235,16 @@ class PlmSelect
             );
 
             /*
-             * Store the selected record in PLM State.
+             * Store the same selected record in PLM State.
              *
-             * This creates:
+             * For:
              *
-             *     %<name>.current._pk
-             *     %<name>.current.<field>
+             *     /plm:select > view | ...
+             *
+             * this creates:
+             *
+             *     %view.current._pk
+             *     %view.current.<field>
              */
             $this->storeCurrentState(
                 $name,
@@ -246,17 +254,15 @@ class PlmSelect
             );
 
             /*
-             * Now the Struct row is attached to PlmReference
-             * and State contains the selected record.
+             * Expand the actual body of the select.
              *
-             * Therefore the content may use both:
+             * Example:
              *
-             *     $field
+             *     __Change : $name
              *
-             * and:
+             * becomes:
              *
-             *     %context.current.field
-             *
+             *     __Change : ACME
              */
             $text =
                 $this->reference->expand(
@@ -271,11 +277,13 @@ class PlmSelect
         } catch (Throwable $e) {
 
             /*
-             * Never leave the selected Struct row attached
-             * after an error.
+             * Never leave the Struct row attached after an error.
              */
             $this->reference->clearRow();
 
+            /*
+             * Also remove the State created by this select.
+             */
             $this->state->clearContext(
                 $name
             );
@@ -288,10 +296,18 @@ class PlmSelect
     }
 
     /**
-     * Expand the select filter through PlmReference.
+     * Resolve references inside the Struct filter.
      *
-     * This intentionally follows the same architecture
-     * as PlmForm.
+     * Supported:
+     *
+     *     &_pk
+     *     %table.current.field
+     *
+     * Examples:
+     *
+     *     _pk=%tablecompanies.current._pk
+     *     ipn=%tableparts.current.ipn
+     *     name=&name
      */
     private function expandFilter(
         string $filter
@@ -352,11 +368,7 @@ class PlmSelect
          *
          * Example:
          *
-         *     %tablecompanies.current._pk
-         *
-         * or:
-         *
-         *     %tablecompanies.current.ipn
+         *     %table.current._pk
          */
         $filter =
             preg_replace_callback(
@@ -397,6 +409,8 @@ class PlmSelect
 
     /**
      * Escape a value inserted into a Struct filter.
+     *
+     * This is intentionally done after reference resolution.
      */
     private function escapeFilterValue(
         string $value
@@ -422,67 +436,68 @@ class PlmSelect
     }
 
     /**
-     * Determine the column indexes of the returned Struct row.
+     * Determine the field => row-index mapping from the
+     * PlmStruct result.
      *
-     * IMPORTANT:
+     * PlmStruct::findOne() and PlmStruct::findByPrimaryKey()
+     * already calculate and return:
      *
-     * This does not perform a Struct search.
+     *     'fieldIndexes' => [
+     *         'fieldname' => row index,
+     *         ...
+     *     ]
      *
-     * The indexes are derived from the schema columns so the
-     * already returned row can be connected to PlmReference.
+     * This must be preferred over deriving the mapping from
+     * SearchConfig because findByPrimaryKey() intentionally
+     * does not return the SearchConfig object.
      */
     private function getFieldIndexes(
-        string $schema,
+        array $record,
         array $row
     ): array {
 
-        $schemaObject =
-            new \dokuwiki\plugin\struct\meta\Schema(
-                $schema
-            );
+        $fieldIndexes =
+            $record['fieldIndexes']
+            ?? null;
 
-        if (!$schemaObject->getId()) {
+        if (
+            !is_array($fieldIndexes) ||
+            empty($fieldIndexes)
+        ) {
 
             throw new \RuntimeException(
-                'Struct schema does not exist: ' .
-                $schema
+                'PLM select: Struct field indexes are not available.'
             );
         }
 
         /*
-         * SearchConfig rows contain values in the same column
-         * order as the SearchConfig columns.
-         *
-         * getColumns() provides that order.
+         * Keep only mappings which actually point to a
+         * value position in the returned row.
          */
-        $columns =
-            $schemaObject->getColumns();
-
-        if (empty($columns)) {
-
-            throw new \RuntimeException(
-                'Struct schema contains no fields: ' .
-                $schema
-            );
-        }
-
-        $fieldIndexes = [];
-
-        /*
-         * The row returned by SearchConfig contains exactly
-         * the requested columns, not necessarily every schema
-         * column.
-         *
-         * Therefore we need to determine the actual columns
-         * from the row's value objects where possible.
-         *
-         * For normal Struct fields the schema order is used.
-         */
-        $index = 0;
+        $result = [];
 
         foreach (
-            $columns as $column
+            $fieldIndexes as $field => $index
         ) {
+
+            if (
+                !is_string($field) ||
+                $field === ''
+            ) {
+                continue;
+            }
+
+            if (
+                !is_int($index) &&
+                !ctype_digit(
+                    (string) $index
+                )
+            ) {
+                continue;
+            }
+
+            $index =
+                (int) $index;
 
             if (
                 !array_key_exists(
@@ -490,38 +505,35 @@ class PlmSelect
                     $row
                 )
             ) {
-                break;
+                continue;
             }
 
-            $fieldIndexes[
-                $column->getLabel()
-            ] = $index;
-
-            $index++;
+            $result[$field] =
+                $index;
         }
 
-        /*
-         * If the returned row has more entries than could be
-         * mapped through the schema columns, do not invent
-         * field names.
-         */
-        if (empty($fieldIndexes)) {
+        if (empty($result)) {
 
             throw new \RuntimeException(
-                'Could not determine Struct column indexes.'
+                'PLM select: could not map Struct result columns.'
             );
         }
 
-        return $fieldIndexes;
+        return $result;
     }
 
     /**
-     * Store the selected Struct row in PLM State.
+     * Store the selected Struct record in PLM State.
      *
-     * Result:
+     * Example:
      *
-     *     %<context>.current._pk
-     *     %<context>.current.<field>
+     *     context = view
+     *
+     * produces:
+     *
+     *     %view.current._pk
+     *     %view.current.name
+     *     %view.current.description
      */
     private function storeCurrentState(
         string $context,
@@ -564,10 +576,7 @@ class PlmSelect
             }
 
             /*
-             * Struct Value objects may provide a display value.
-             *
-             * State intentionally stores the display value here,
-             * just as PlmForm/PLM State expects.
+             * PLM State stores display values for normal fields.
              */
             if (
                 method_exists(
@@ -646,7 +655,7 @@ class PlmSelect
     }
 
     /**
-     * Render PLM content.
+     * Render expanded PLM content.
      */
     private function renderContent(
         string $text
@@ -687,3 +696,4 @@ class PlmSelect
             '</div>';
     }
 }
+

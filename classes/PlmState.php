@@ -44,7 +44,7 @@ class PlmState
         $encoded = '';
 
         /*
-         * Normal DokuWiki request.
+         * Normal DokuWiki GET request.
          */
         if (
             isset($INPUT) &&
@@ -77,6 +77,48 @@ class PlmState
                     $_GET[self::PARAMETER]
                 )
                     ? $_GET[self::PARAMETER]
+                    : '';
+        }
+
+        /*
+         * Form submissions carry the PLM state as a
+         * hidden POST field because the form action itself
+         * does not contain ?plm=...
+         */
+        if ($encoded === '') {
+
+            if (
+                isset($INPUT) &&
+                is_object($INPUT) &&
+                isset($INPUT->post)
+            ) {
+                try {
+
+                    $encoded =
+                        $INPUT->post->str(
+                            self::PARAMETER
+                        );
+
+                } catch (Throwable $e) {
+
+                    $encoded = '';
+                }
+            }
+        }
+
+        /*
+         * Fallback for environments where DokuWiki's
+         * Input object is not available.
+         */
+        if (
+            $encoded === '' &&
+            isset($_POST[self::PARAMETER])
+        ) {
+            $encoded =
+                is_string(
+                    $_POST[self::PARAMETER]
+                )
+                    ? $_POST[self::PARAMETER]
                     : '';
         }
 
