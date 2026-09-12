@@ -9,52 +9,53 @@ require_once __DIR__ . '/classes/PlmForm.php';
 require_once __DIR__ . '/classes/PlmSelect.php';
 require_once __DIR__ . '/classes/PlmBom.php';
 
+require_once __DIR__ . '/model/PK.php';
+require_once __DIR__ . '/model/DbObject.php';
+require_once __DIR__ . '/model/ItemRef.php';
+require_once __DIR__ . '/model/Part.php';
+require_once __DIR__ . '/model/Product.php';
+require_once __DIR__ . '/model/ProductVariant.php';
+require_once __DIR__ . '/persist/PlmDB.php';
+
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 {
-    private const entryPattern =
-        '\/plm:(?=[a-zA-Z0-9_-]+)';
+    private const entryPattern = '\/plm:(?=[a-zA-Z0-9_-]+)';
+    private const exitPattern = '\/plm';
 
-    private const exitPattern =
-        '\/plm';
 
-    public function getType()
-    {
+    /** @var PlmDB $plmdb */
+    private $plmdb;
+
+    public function getType() {
         return 'container';
     }
 
-    public function getPType()
-    {
+    public function getPType() {
         return 'block';
     }
 
-    public function getSort()
-    {
+    public function getSort() {
         return 155;
     }
 
-    public function connectTo($mode)
-    {
-        $this->Lexer->addEntryPattern(
-            self::entryPattern,
-            $mode,
-            'plugin_plm'
-        );
+    public function connectTo($mode) {
+        $this->Lexer->addEntryPattern( self::entryPattern, $mode, 'plugin_plm' );
     }
 
-    public function postConnect()
-    {
-        $this->Lexer->addExitPattern(
-            self::exitPattern,
-            'plugin_plm'
-        );
+    public function postConnect() {
+        $this->Lexer->addExitPattern( self::exitPattern, 'plugin_plm');
     }
 
-    public function handle(
-        $match,
-        $state,
-        $pos,
-        Doku_Handler $handler
-    ) {
+    private function persist() : PlmDB {
+        if ($this->plmdb !== null) {
+            return $this->plmdb;
+        }
+
+        $this->plmdb = new PlmDB();
+        return $this->plmdb;
+    }
+
+    public function handle( $match, $state, $pos, Doku_Handler $handler ) {
         switch ($state) {
 
             case DOKU_LEXER_ENTER:
@@ -95,9 +96,7 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             spl_object_id($renderer);
 
         if (!isset($states[$rendererId])) {
-
-            $states[$rendererId] =
-                new PlmState();
+            $states[$rendererId] = new PlmState();
         }
 
         if (!isset($blocks[$rendererId])) {
@@ -120,11 +119,8 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
         if (isset($data['exit'])) {
 
-            $block =
-                $blocks[$rendererId];
-
-            $state =
-                $states[$rendererId];
+            $block = $blocks[$rendererId];
+            $state = $states[$rendererId];
 
             unset(
                 $blocks[$rendererId]
@@ -197,13 +193,37 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         return false;
     }
 
-    private function renderBlock(
-        Doku_Renderer $renderer,
-        string $header,
-        string $content,
-        PlmState $state
-    ): bool {
+    private function test() {
+        $search = 'ASY-MC1210F-FPNL-BLK';
 
+        /** @var Part */
+        $res = $this->persist()->findPart($search);
+
+        if ($res !== null) {
+            echo 'Found part: ipn=' . $res->ipn . ', category=' . $res->category . ', description=' . $res->description;
+        } else {
+            echo 'Error! part not found. ipn=' . $search;
+        }
+
+
+        $search = 'MC1210F-BK';
+
+        /** @var ProductVariant */
+        $variant = $this->persist()->findVariant($search);
+
+        if ($variant !== null) {
+            echo 'Found variant: name=' . $variant->name . ', description=' . $variant->description . '; ';
+
+            foreach ($variant->subItems as $item) {
+                echo 'Child item: ' . $item->subItemVersion->id . ', quantity=' . $item->quantity . '; ';
+            }
+
+        } else {
+            echo 'Error! variant not found. name=' . $search;
+        }
+    }
+
+    private function renderBlock( Doku_Renderer $renderer, string $header, string $content, PlmState $state ): bool {
         try {
 
             /*
@@ -217,25 +237,13 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
              *
              * The value after ">" is the variant_id.
              */
-            if (
-                preg_match(
-                    '/^bom\s*>\s*([a-zA-Z0-9_-]+)\s*$/i',
-                    trim($header),
-                    $bomMatch
-                )
-            ) {
+            if ( preg_match( '/^bom\s*>\s*([a-zA-Z0-9_-]+)\s*$/i', trim($header), $bomMatch ) ) {
 
-                $struct =
-                    new PlmStruct();
+                $this->test();
 
-                $bom =
-                    new PlmBom(
-                        $struct,
-                        $bomMatch[1]
-                    );
-
-                $renderer->doc .=
-                    $bom->render();
+                $struct = new PlmStruct();
+                $bom = new PlmBom( $struct, $bomMatch[1] );
+                $renderer->doc .= $bom->render();
 
                 return true;
             }

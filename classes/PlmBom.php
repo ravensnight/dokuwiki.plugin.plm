@@ -183,16 +183,16 @@ class PlmBom {
         array $variant
     ): string {
 
-        $html = '<ul class="plm-bom-variant-data">';
+        $productId = $this->getLookupDisplayValue(
+            $variant['product_id'] ?? null
+        );
+
+        $html = '<ul class="plm-bom-node-attrlist">';
 
         $html .= $this->renderAttribute("Product", hsc($productId));
         
         $html .= $this->renderFieldIfPresent(
             $variant, 'variant_id', 'Variant'
-        );
-
-        $productId = $this->getLookupDisplayValue(
-            $variant['product_id'] ?? null
         );
 
         $html .= $this->renderFieldIfPresent(
@@ -288,7 +288,7 @@ class PlmBom {
         }
 
         if ($description !== '') {
-            $title .= ' — ' . $description;
+            $title = $title . ' : ' . $description;
         }
 
         $html = '<div class="plm-bom-node plm-bom-level' . $level . '" >';

@@ -6,15 +6,8 @@ require_once __DIR__ . '/classes/PlmReference.php';
 
 class action_plugin_plm extends DokuWiki_Action_Plugin
 {
-    public function register(
-        Doku_Event_Handler $controller
-    ) {
-        $controller->register_hook(
-            'DOKUWIKI_STARTED',
-            'BEFORE',
-            $this,
-            'handleRequest'
-        );
+    public function register( Doku_Event_Handler $controller ) {
+        $controller->register_hook('DOKUWIKI_STARTED','BEFORE', $this, 'handleRequest');
     }
 
     /**
