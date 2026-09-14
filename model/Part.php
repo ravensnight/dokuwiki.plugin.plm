@@ -54,6 +54,21 @@ class Part extends DbObject {
     }
 
     /**
+     * @return Part[]
+     */
+    public static function entries(PlmDB $db): array
+    {
+        $rows = $db->fetchAll('SELECT * FROM plm_part ORDER BY ipn ASC;');
+        $parts = [];
+
+        foreach ($rows as $row) {
+            $parts[] = new Part($row);
+        }
+
+        return $parts;
+    }
+
+    /**
      * @return PartVersion[]
      */
     public function fetchVersions(PlmDB $db) : ?array {

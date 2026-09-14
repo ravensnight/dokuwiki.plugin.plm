@@ -24,6 +24,7 @@ require_once __DIR__ . '/macro/PlmState.php';
 require_once __DIR__ . '/macro/PlmReference.php';
 require_once __DIR__ . '/macro/PlmMacro.php';
 require_once __DIR__ . '/macro/PlmBom.php';
+require_once __DIR__ . '/macro/PlmPartList.php';
 
 
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
@@ -153,6 +154,18 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                     // $struct = new PlmStruct();
                     $bom = new PlmBom( $renderer, $this->persist(), $header->context );
                     $bom->render( $header, $renderContext->body );
+
+                    return true;
+
+                case 'partlist':
+
+                    // /plm:partlist > variant-name
+                    $partList = new PlmPartList(
+                        $renderer,
+                        $this->persist(),
+                        $header->context
+                    );
+                    $partList->render($header, $renderContext->body);
 
                     return true;
 
