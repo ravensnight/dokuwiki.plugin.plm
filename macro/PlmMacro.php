@@ -5,11 +5,15 @@ abstract class PlmMacro {
     protected PlmDB $db;
 
     /** @var HtmlBuilder */
-    protected readonly HtmlBuilder $out;
+    private readonly HtmlBuilder $out;
 
     protected function __construct(Doku_Renderer $renderer, PlmDB $db) {
         $this->db = $db;
         $this->out = new HtmlBuilder($renderer);
+    }
+
+    protected function out() : HtmlBuilder {
+        return $this->out;
     }
 
     /**

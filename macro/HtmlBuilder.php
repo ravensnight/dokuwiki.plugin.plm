@@ -16,13 +16,13 @@ class HtmlBuilder {
      * @param string $tag
      * @param array<string, mixed> $params
      */
-    public function opn(string $tag, array $params) : self {
-        $this->stack[] = new HtmlContext($tag, $params);
+    public function opn(string $tag, ?string $css_class = null, ?array $params = null) : self {
+        $this->stack[] = new HtmlContext($tag, $css_class, $params);
         return $this;
     }
 
-    public function tag(string $tag, ?string $content = null, array $params) : self {
-        $this->opn($tag, $params);
+    public function tag(string $tag, string $content, ?string $css_class = null, ?array $params = null) : self {
+        $this->opn($tag, $css_class, $params);
         $this->add($content);
         $this->cls();
 
