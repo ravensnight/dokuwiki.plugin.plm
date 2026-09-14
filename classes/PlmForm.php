@@ -49,15 +49,9 @@ class PlmForm
     /**
      * Render the PLM form.
      */
-    public function render(
-        string $name,
-        string $schema,
-        string $filter,
-        string $content,
-        string $errortext = 'not found!'
-    ): void {
+    public function render( MacroHeader $header, string $content ): void {
 
-        if ($schema === '') {
+        if ($header->reference === '') {
             $this->error(
                 'PLM form: parameter "schema" is required'
             );
@@ -65,10 +59,7 @@ class PlmForm
             return;
         }
 
-        $params =
-            $this->parser->parse(
-                $content
-            );
+        $params = $this->parser->parse( $content );
 
         /*
          * Register templates with the central
@@ -88,11 +79,7 @@ class PlmForm
          *         'foo'     => '...'
          *     ]
          */
-        $this->reference->setTemplates(
-            $this->getTemplates(
-                $params
-            )
-        );
+        $this->reference->setTemplates( $this->getTemplates( $params ) );
 
         /*
          * Expand references in the filter.
@@ -103,44 +90,29 @@ class PlmForm
          *     %context.filter.field
          *     %context.current.field
          */
-        $originalFilter =
-            $filter;
+        $originalFilter = $header->filter;
 
-        $filter =
-            $this->expandFilter(
-                $filter
-            );
+        $filter = $this->expandFilter( $header->filter );
 
         /*
          * A missing reference value means that the requested
          * record cannot be found.
          */
         if ($this->filterStateMissing) {
-
-            $this->renderEmpty(
-                $errortext
-            );
-
+            $this->renderEmpty( $header->message );
             return;
         }
 
-        $fields =
-            $this->getFields(
-                $params
-            );
-
-        $actions =
-            $this->getActions(
-                $params
-            );
+        $fields = $this->getFields( $params );
+        $actions = $this->getActions( $params );
 
         $this->renderForm(
-            $schema,
+            $header->reference,
             $filter,
             $fields,
             $actions,
             $params,
-            $errortext
+            $header->message
         );
     }
 
@@ -151,15 +123,12 @@ class PlmForm
      * will be passed to Struct as a filter expression.
      */
     private function expandFilter(
-        string $filter
+        ?string $filter
     ): ?string {
 
         $this->filterStateMissing = false;
 
-        $filter =
-            trim(
-                $filter
-            );
+        $filter = trim( $filter ?? '');
 
         if ($filter === '') {
             return null;
@@ -519,10 +488,10 @@ class PlmForm
      * Render the normal "nothing found" message.
      */
     private function renderEmpty(
-        string $text
+        ?string $text
     ): void {
 
-        if (trim($text) === '') {
+        if ($text === null) {
             return;
         }
 

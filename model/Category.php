@@ -1,15 +1,10 @@
 <?php
 
-class Category extends DbObject {
+class Category extends DbEnum {
     
-    public string $name;
-    public ?string $description = null;
-    public ?int $sort_order = null;
-    public bool $active = false;
-    
-    public function __construct(int $primaryKey, string $name)
+    #[Override]
+    protected static function getTableName(): string
     {
-        parent::__construct($primaryKey);
-        $this->name = $name;
+        return 'plm_categories';
     }
 }

@@ -1,15 +1,10 @@
 <?php
 
-class Status extends DbObject {
-    
-    public string $name;
-    public ?string $description = null;
-    public ?int $sort_order = null;
-    public bool $active = false;
-    
-    public function __construct(int $primaryKey, string $name)
+class Status extends DbEnum
+{
+    #[Override]
+    protected static function getTableName(): string
     {
-        parent::__construct($primaryKey);
-        $this->name = $name;
+        return 'plm_categories';
     }
 }

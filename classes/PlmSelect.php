@@ -68,38 +68,20 @@ class PlmSelect
      *     3. stored as <context>.current in PlmState
      *     4. used to expand the select content
      */
-    public function render(
-        string $name,
-        string $schema,
-        string $filter,
-        string $content,
-        string $errortext = 'not found!'
-    ): void {
+    public function render( MacroHeader $header, string $content ) : void {
 
-        if ($name === '') {
-
-            $this->error(
-                'PLM select: context is required'
-            );
-
+        if ($header->context === '') {
+            $this->error( 'PLM select: context is required' );
             return;
         }
 
-        if ($schema === '') {
-
-            $this->error(
-                'PLM select: parameter "schema" is required'
-            );
-
+        if ($header->reference === '') {
+            $this->error('PLM select: parameter "schema" is required');
             return;
         }
 
-        if ($filter === '') {
-
-            $this->error(
-                'PLM select: parameter "filter" is required'
-            );
-
+        if ($header->filter === '') {
+            $this->error('PLM select: parameter "filter" is required');
             return;
         }
 
@@ -129,33 +111,19 @@ class PlmSelect
              *
              *     _pk=123
              */
-            $expandedFilter =
-                $this->expandFilter(
-                    $filter
-                );
+            $expandedFilter = $this->expandFilter( $header->filter );
 
             /*
              * A missing referenced value means there can be
              * no valid Struct record to select.
              */
             if ($this->filterStateMissing) {
-
-                $this->renderEmpty(
-                    $errortext
-                );
-
+                $this->renderEmpty($header->message);
                 return;
             }
 
-            if (
-                $expandedFilter === null ||
-                trim($expandedFilter) === ''
-            ) {
-
-                $this->renderEmpty(
-                    $errortext
-                );
-
+            if ( $expandedFilter === null || trim($expandedFilter) === '' ) {
+                $this->renderEmpty($header->message);
                 return;
             }
 
@@ -165,39 +133,18 @@ class PlmSelect
              * _pk is handled by PlmStruct::findByPrimaryKey().
              */
             $record =
-                $this->struct->findOne(
-                    $schema,
-                    $expandedFilter
-                );
+                $this->struct->findOne( $header->reference, $expandedFilter );
 
             if ($record === null) {
-
-                $this->renderEmpty(
-                    $errortext
-                );
-
+                $this->renderEmpty($header->message);
                 return;
             }
 
-            $row =
-                $record['row']
-                ?? null;
+            $row = $record['row'] ?? null;
+            $rid = (int)($record['rid'] ?? 0);
 
-            $rid =
-                (int) (
-                    $record['rid']
-                    ?? 0
-                );
-
-            if (
-                !is_array($row) ||
-                $rid <= 0
-            ) {
-
-                $this->renderEmpty(
-                    $errortext
-                );
-
+            if (!is_array($row) || $rid <= 0) {
+                $this->renderEmpty($header->message);
                 return;
             }
 
@@ -246,12 +193,7 @@ class PlmSelect
              *     %view.current._pk
              *     %view.current.<field>
              */
-            $this->storeCurrentState(
-                $name,
-                $row,
-                $fieldIndexes,
-                $rid
-            );
+            $this->storeCurrentState($header->context,$row,$fieldIndexes,$rid);
 
             /*
              * Expand the actual body of the select.
@@ -284,14 +226,8 @@ class PlmSelect
             /*
              * Also remove the State created by this select.
              */
-            $this->state->clearContext(
-                $name
-            );
-
-            $this->error(
-                'PLM select: ' .
-                $e->getMessage()
-            );
+            $this->state->clearContext($header->context);
+            $this->error('PLM select: ' .$e->getMessage());
         }
     }
 
@@ -625,10 +561,10 @@ class PlmSelect
      * Render the normal "nothing found" message.
      */
     private function renderEmpty(
-        string $text
+        ?string $text
     ): void {
 
-        if (trim($text) === '') {
+        if ($text === null) {
             return;
         }
 

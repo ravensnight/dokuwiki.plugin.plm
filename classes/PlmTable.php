@@ -35,15 +35,9 @@ class PlmTable
             );
     }
 
-    public function render(
-        string $name,
-        string $schema,
-        string $filter,
-        string $content,
-        string $errortext = 'not found!'
-    ): void {
+    public function render(MacroHeader $header, string $content) : void {
 
-        if (empty($schema)) {
+        if (empty($header->reference)) {
 
             $this->error(
                 'PLM table: parameter "schema" is required'
@@ -52,10 +46,7 @@ class PlmTable
             return;
         }
 
-        $params =
-            $this->parser->parse(
-                $content
-            );
+        $params = $this->parser->parse( $content );
 
         if (empty($params['cols'])) {
 
@@ -66,8 +57,7 @@ class PlmTable
             return;
         }
 
-        $columns =
-            $params['cols'];
+        $columns = $params['cols'];
 
         /*
          * Templates belong to PlmReference.
@@ -83,26 +73,10 @@ class PlmTable
 
         try {
 
-            $fields =
-                $this->getStructFields(
-                    $params
-                );
-
-            $filter =
-                $this->expandFilter(
-                    $filter
-                );
-
-            $stateFilter =
-                $this->buildStateFilter(
-                    $name
-                );
-
-            $filter =
-                $this->combineFilters(
-                    $filter,
-                    $stateFilter
-                );
+            $fields = $this->getStructFields( $params );
+            $filter = $this->expandFilter( $header->filter ?? '');
+            $stateFilter = $this->buildStateFilter( $header->context );
+            $filter = $this->combineFilters( $filter, $stateFilter );
 
             /*
              * Extract special Lookup RID filters.
@@ -150,7 +124,7 @@ class PlmTable
 
             $result =
                 $this->struct->search(
-                    $schema,
+                    $header->reference,
                     $fields,
                     $structFilter
                 );
@@ -188,13 +162,13 @@ class PlmTable
         }
 
         $this->renderTable(
-            $name,
-            $schema,
+            $header->context,
+            $header->reference,
             $columns,
             $search,
             $rows,
             $params,
-            $errortext
+            $header->message
         );
     }
 
@@ -1074,7 +1048,7 @@ class PlmTable
         $search,
         array $rows,
         array $params,
-        string $errortext
+        ?string $errortext
     ): void {
 
         $fieldIndexes = [];

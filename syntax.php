@@ -9,12 +9,19 @@ require_once __DIR__ . '/classes/PlmForm.php';
 require_once __DIR__ . '/classes/PlmSelect.php';
 require_once __DIR__ . '/classes/PlmBom.php';
 
-require_once __DIR__ . '/model/PK.php';
 require_once __DIR__ . '/model/DbObject.php';
-require_once __DIR__ . '/model/ItemRef.php';
+require_once __DIR__ . '/model/DbEnum.php';
+require_once __DIR__ . '/model/Category.php';
+require_once __DIR__ . '/model/Status.php';
+require_once __DIR__ . '/model/PartVersion.php';
+require_once __DIR__ . '/model/PartItemRef.php';
 require_once __DIR__ . '/model/Part.php';
 require_once __DIR__ . '/model/Product.php';
 require_once __DIR__ . '/model/ProductVariant.php';
+require_once __DIR__ . '/model/VariantItemRef.php';
+require_once __DIR__ . '/macro/MacroHeader.php';
+require_once __DIR__ . '/macro/RenderContext.php';
+require_once __DIR__ . '/macro/HeaderParser.php';
 require_once __DIR__ . '/persist/PlmDB.php';
 
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
@@ -55,232 +62,68 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         return $this->plmdb;
     }
 
-    public function handle( $match, $state, $pos, Doku_Handler $handler ) {
+    public function handle( $match, $state, $pos, Doku_Handler $handler) {
         switch ($state) {
 
-            case DOKU_LEXER_ENTER:
-
-                return [
-                    'enter' => true,
-                ];
+            case DOKU_LEXER_ENTER:                
+                return [ 'enter' => true ];
 
             case DOKU_LEXER_UNMATCHED:
-
-                return [
-                    'content' => $match,
-                ];
+                return [ 'content' => $match ];
 
             case DOKU_LEXER_EXIT:
+                return [ 'exit' => true];
 
-                return [
-                    'exit' => true,
-                ];
+            default:
+                echo "State: " . $state;
+                return null;
         }
-
-        return null;
     }
 
-    public function render(
-        $mode,
-        Doku_Renderer $renderer,
-        $data
-    ) {
+    public function render( $mode, Doku_Renderer $renderer, $data) {
+
         if ($mode !== 'xhtml') {
             return false;
         }
 
-        static $blocks = [];
-        static $states = [];
+        static $renderContext = [];
+        $rendererId = spl_object_id($renderer);
 
-        $rendererId =
-            spl_object_id($renderer);
-
-        if (!isset($states[$rendererId])) {
-            $states[$rendererId] = new PlmState();
-        }
-
-        if (!isset($blocks[$rendererId])) {
-
-            $blocks[$rendererId] = [
-                'header' => '',
-                'content' => '',
-            ];
+        if (!isset($renderContext[$rendererId])) {
+            $renderContext[$rendererId] = RenderContext::createEmpty(new PlmState());
         }
 
         if (isset($data['enter'])) {
-
-            $blocks[$rendererId] = [
-                'header' => '',
-                'content' => '',
-            ];
-
+            $renderContext[$rendererId]->clear();
             return true;
         }
+        elseif (isset($data['exit'])) {
+            /** @var RenderContext */
+            $context = $renderContext[$rendererId];
+            unset($renderContext[$rendererId]);
 
-        if (isset($data['exit'])) {
-
-            $block = $blocks[$rendererId];
-            $state = $states[$rendererId];
-
-            unset(
-                $blocks[$rendererId]
-            );
-
-            return $this->renderBlock(
-                $renderer,
-                $block['header'],
-                $block['content'],
-                $state
-            );
+            return $this->renderBlock($renderer, $context);
         }
-
-        if (isset($data['content'])) {
-
-            if (
-                $blocks[$rendererId]['header'] === ''
-            ) {
-
-                $content =
-                    $data['content'];
-
-                $content =
-                    str_replace(
-                        ["\r\n", "\r"],
-                        "\n",
-                        $content
-                    );
-
-                $pos =
-                    strpos(
-                        $content,
-                        "\n"
-                    );
-
-                if ($pos === false) {
-
-                    $blocks[$rendererId]['header'] =
-                        trim(
-                            $content
-                        );
-
-                } else {
-
-                    $blocks[$rendererId]['header'] =
-                        trim(
-                            substr(
-                                $content,
-                                0,
-                                $pos
-                            )
-                        );
-
-                    $blocks[$rendererId]['content'] =
-                        substr(
-                            $content,
-                            $pos + 1
-                        );
-                }
-
-            } else {
-
-                $blocks[$rendererId]['content'] .=
-                    $data['content'];
-            }
-
+        elseif (isset($data['content'])) {
+            $renderContext[$rendererId]->fromMacroContent($data['content']);
             return true;
         }
 
         return false;
+
     }
 
-    private function test() {
-        $search = 'ASY-MC1210F-FPNL-BLK';
-
-        /** @var Part */
-        $res = $this->persist()->findPart($search);
-
-        if ($res !== null) {
-            echo 'Found part: ipn=' . $res->ipn . ', category=' . $res->category . ', description=' . $res->description;
-        } else {
-            echo 'Error! part not found. ipn=' . $search;
-        }
-
-
-        $search = 'MC1210F-BK';
-
-        /** @var ProductVariant */
-        $variant = $this->persist()->findVariant($search);
-
-        if ($variant !== null) {
-            echo 'Found variant: name=' . $variant->name . ', description=' . $variant->description . '; ';
-
-            foreach ($variant->subItems as $item) {
-                echo 'Child item: ' . $item->subItemVersion->id . ', quantity=' . $item->quantity . '; ';
-            }
-
-        } else {
-            echo 'Error! variant not found. name=' . $search;
-        }
-    }
-
-    private function renderBlock( Doku_Renderer $renderer, string $header, string $content, PlmState $state ): bool {
+    private function renderBlock( Doku_Renderer $renderer, RenderContext $renderContext): bool {
         try {
-
-            /*
-             * -----------------------------------------------------
-             * BOM
-             * -----------------------------------------------------
-             *
-             * Syntax:
-             *
-             *     /plm:bom > MC1210F-BLACK
-             *
-             * The value after ">" is the variant_id.
-             */
-            if ( preg_match( '/^bom\s*>\s*([a-zA-Z0-9_-]+)\s*$/i', trim($header), $bomMatch ) ) {
-
-                $this->test();
-
-                $struct = new PlmStruct();
-                $bom = new PlmBom( $struct, $bomMatch[1] );
-                $renderer->doc .= $bom->render();
-
-                return true;
-            }
 
             /*
              * Everything else uses the normal PLM header syntax.
              */
-            $definition =
-                $this->parseHeader(
-                    $header
-                );
-
-            if ($definition === null) {
-
-                $this->error(
-                    $renderer,
-                    'Invalid PLM header: ' .
-                    $header
-                );
-
+            $header = HeaderParser::parse($renderContext->header);
+            if ($header === null) {
+                $this->error( $renderer, 'Invalid PLM header: ' . $renderContext->header);
                 return true;
             }
-
-            $type =
-                $definition['type'];
-
-            $name =
-                $definition['name'];
-
-            $schema =
-                $definition['schema'];
-
-            $filter =
-                $definition['filter'];
-
-            $errortext =
-                $definition['errortext'];
 
             /*
              * A single PlmReference instance is shared by
@@ -294,92 +137,48 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
              *     $lookup._pk
              *     %context.scope.field
              *     @template
-             */
-            $struct =
-                new PlmStruct();
+             */            
+            $struct =new PlmStruct();
+            $reference = new PlmReference( $renderContext->state, $struct );
 
-            $reference =
-                new PlmReference(
-                    $state,
-                    $struct
-                );
+            switch ($header->macro) {
 
-            switch ($type) {
+                case 'bom':
+
+                    // /plm:bom > MC1210F-BLACK                    
+                    // $struct = new PlmStruct();
+                    $bom = new PlmBom($this->persist(), $header->context );
+                    $renderer->doc .= $bom->render();
+
+                    return true;
+
 
                 case 'table':
 
-                    $parser =
-                        new PlmParser();
+                    $parser = new PlmParser();
+                    $table = new PlmTable( $renderer, $struct, $parser, $renderContext->state);
 
-                    $table =
-                        new PlmTable(
-                            $renderer,
-                            $struct,
-                            $parser,
-                            $state
-                        );
-
-                    $table->render(
-                        $name,
-                        $schema,
-                        $filter,
-                        $content,
-                        $errortext
-                    );
-
+                    $table->render( $header, $renderContext->body );
                     return true;
 
                 case 'form':
 
-                    $parser =
-                        new PlmParser();
+                    $parser = new PlmParser();
+                    $form = new PlmForm( $renderer, $struct, $parser, $renderContext->state);
 
-                    $form =
-                        new PlmForm(
-                            $renderer,
-                            $struct,
-                            $parser,
-                            $state
-                        );
-
-                    $form->render(
-                        $name,
-                        $schema,
-                        $filter,
-                        $content,
-                        $errortext
-                    );
-
+                    $form->render( $header, $renderContext->body );
                     return true;
 
                 case 'select':
 
-                    $select =
-                        new PlmSelect(
-                            $renderer,
-                            $struct,
-                            $state,
-                            $reference
-                        );
+                    $select = new PlmSelect( $renderer, $struct, $renderContext->state, $reference );
 
-                    $select->render(
-                        $name,
-                        $schema,
-                        $filter,
-                        $content,
-                        $errortext
-                    );
-
+                    $select->render( $header, $renderContext->body );
                     return true;
 
                 default:
 
-                    $this->error(
-                        $renderer,
-                        'Unknown PLM component: ' .
-                        $type
-                    );
-
+                    $this->error( $renderer, 'Unknown PLM component: ' . $header->macro);
                     return true;
             }
 
@@ -393,76 +192,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
             return true;
         }
-    }
-
-    private function parseHeader(
-        string $header
-    ): ?array {
-
-        $header =
-            trim(
-                $header
-            );
-
-        if (!preg_match(
-            '/^'
-            . '([a-zA-Z0-9_-]+)'
-            . '\s*>\s*'
-            . '([a-zA-Z0-9_-]+)'
-            . '\s*\|\s*'
-            . '([a-zA-Z0-9_-]+)'
-            . '(?:\s*\[([^\]]*)\])?'
-            . '(?:\s+"((?:\\\\.|[^"\\\\])*)")?'
-            . '\s*$'
-            . '/',
-            $header,
-            $match
-        )) {
-            return null;
-        }
-
-        $filter =
-            isset($match[4])
-                ? trim($match[4])
-                : '';
-
-        if (
-            isset($match[5])
-        ) {
-
-            $errortext =
-                stripcslashes(
-                    $match[5]
-                );
-
-        } else {
-
-            $errortext =
-                'not found!';
-        }
-
-        return [
-            'type' =>
-                strtolower(
-                    $match[1]
-                ),
-
-            'name' =>
-                trim(
-                    $match[2]
-                ),
-
-            'schema' =>
-                trim(
-                    $match[3]
-                ),
-
-            'filter' =>
-                $filter,
-
-            'errortext' =>
-                $errortext,
-        ];
     }
 
     private function error(
