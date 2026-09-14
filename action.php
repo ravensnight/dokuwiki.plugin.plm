@@ -1,8 +1,7 @@
 <?php
 
-require_once __DIR__ . '/classes/PlmStruct.php';
-require_once __DIR__ . '/classes/PlmState.php';
-require_once __DIR__ . '/classes/PlmReference.php';
+require_once __DIR__ . '/macro/PlmState.php';
+require_once __DIR__ . '/macro/PlmReference.php';
 
 class action_plugin_plm extends DokuWiki_Action_Plugin
 {
@@ -63,20 +62,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $INPUT->post->has('plm_table') &&
             $INPUT->post->has('plm_details')
         ) {
-
-            try {
-
-                $this->processTableDetails();
-
-            } catch (Throwable $e) {
-
-                msg(
-                    'PLM table: ' .
-                    $e->getMessage(),
-                    -1
-                );
-            }
-
+            // Disabled: table details relied on the removed PlmStruct class.
+            msg('PLM table details are unavailable because Struct support was removed.', -1);
             return;
         }
 
@@ -117,20 +104,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $INPUT->post->has('plm_table') &&
             $INPUT->post->has('plm_delete')
         ) {
-
-            try {
-
-                $this->processTableDelete();
-
-            } catch (Throwable $e) {
-
-                msg(
-                    'PLM table: ' .
-                    $e->getMessage(),
-                    -1
-                );
-            }
-
+            // Disabled: table deletion relied on the removed PlmStruct class.
+            msg('PLM table deletion is unavailable because Struct support was removed.', -1);
             return;
         }
 
@@ -146,20 +121,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
             $INPUT->post->has('plm_create') &&
             !$INPUT->post->has('plm_form')
         ) {
-
-            try {
-
-                $this->processTableCreate();
-
-            } catch (Throwable $e) {
-
-                msg(
-                    'PLM table: ' .
-                    $e->getMessage(),
-                    -1
-                );
-            }
-
+            // Disabled: table creation relied on the removed PlmStruct class.
+            msg('PLM table creation is unavailable because Struct support was removed.', -1);
             return;
         }
 
@@ -177,20 +140,8 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
                 'plm_form_submit'
             )
         ) {
-
-            try {
-
-                $this->processForm();
-
-            } catch (Throwable $e) {
-
-                msg(
-                    'PLM form: ' .
-                    $e->getMessage(),
-                    -1
-                );
-            }
-
+            // Disabled: form processing relied on the removed PlmStruct class.
+            msg('PLM form actions are unavailable because Struct support was removed.', -1);
             return;
         }
     }

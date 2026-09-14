@@ -1,13 +1,5 @@
 <?php
 
-require_once __DIR__ . '/classes/PlmParser.php';
-require_once __DIR__ . '/classes/PlmStruct.php';
-require_once __DIR__ . '/classes/PlmState.php';
-require_once __DIR__ . '/classes/PlmReference.php';
-require_once __DIR__ . '/classes/PlmTable.php';
-require_once __DIR__ . '/classes/PlmForm.php';
-require_once __DIR__ . '/classes/PlmSelect.php';
-require_once __DIR__ . '/classes/PlmBom.php';
 
 require_once __DIR__ . '/model/DbObject.php';
 require_once __DIR__ . '/model/DbEnum.php';
@@ -19,10 +11,20 @@ require_once __DIR__ . '/model/Part.php';
 require_once __DIR__ . '/model/Product.php';
 require_once __DIR__ . '/model/ProductVariant.php';
 require_once __DIR__ . '/model/VariantItemRef.php';
+
+require_once __DIR__ . '/persist/PlmDB.php';
+
 require_once __DIR__ . '/macro/MacroHeader.php';
 require_once __DIR__ . '/macro/RenderContext.php';
 require_once __DIR__ . '/macro/HeaderParser.php';
-require_once __DIR__ . '/persist/PlmDB.php';
+require_once __DIR__ . '/macro/HtmlContext.php';
+require_once __DIR__ . '/macro/HtmlBuilder.php';
+require_once __DIR__ . '/macro/PlmParser.php';
+require_once __DIR__ . '/macro/PlmState.php';
+require_once __DIR__ . '/macro/PlmReference.php';
+require_once __DIR__ . '/macro/PlmMacro.php';
+require_once __DIR__ . '/macro/PlmBom.php';
+
 
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 {
@@ -138,7 +140,9 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
              *     %context.scope.field
              *     @template
              */            
-            $struct =new PlmStruct();
+            
+            // $struct =new PlmStruct();
+            $struct = null;
             $reference = new PlmReference( $renderContext->state, $struct );
 
             switch ($header->macro) {
@@ -147,11 +151,10 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                     // /plm:bom > MC1210F-BLACK                    
                     // $struct = new PlmStruct();
-                    $bom = new PlmBom($this->persist(), $header->context );
-                    $renderer->doc .= $bom->render();
+                    $bom = new PlmBom( $renderer, $this->persist(), $header->context );
+                    $bom->render( $header, $renderContext->body );
 
                     return true;
-
 
                 case 'table':
 
