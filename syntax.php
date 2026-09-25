@@ -1,30 +1,31 @@
 <?php
 
-
-require_once __DIR__ . '/model/DbObject.php';
-require_once __DIR__ . '/model/DbEnum.php';
-require_once __DIR__ . '/model/Category.php';
-require_once __DIR__ . '/model/Status.php';
-require_once __DIR__ . '/model/PartVersion.php';
-require_once __DIR__ . '/model/PartItemRef.php';
-require_once __DIR__ . '/model/Part.php';
-require_once __DIR__ . '/model/Product.php';
-require_once __DIR__ . '/model/ProductVariant.php';
-require_once __DIR__ . '/model/VariantItemRef.php';
-
+require_once __DIR__ . '/persist/DbObject.php';
+require_once __DIR__ . '/persist/DbEnum.php';
+require_once __DIR__ . '/persist/Category.php';
+require_once __DIR__ . '/persist/Status.php';
+require_once __DIR__ . '/persist/PartVersion.php';
+require_once __DIR__ . '/persist/PartItemRef.php';
+require_once __DIR__ . '/persist/Part.php';
+require_once __DIR__ . '/persist/Product.php';
+require_once __DIR__ . '/persist/ProductVariant.php';
+require_once __DIR__ . '/persist/VariantItemRef.php';
 require_once __DIR__ . '/persist/PlmDB.php';
+
+require_once __DIR__ . '/util/HtmlContext.php';
+require_once __DIR__ . '/util/HtmlBuilder.php';
+require_once __DIR__ . '/util/Writer.php';
+require_once __DIR__ . '/util/RenderWriter.php';
+require_once __DIR__ . '/util/ResponseWriter.php';
 
 require_once __DIR__ . '/macro/MacroHeader.php';
 require_once __DIR__ . '/macro/RenderContext.php';
 require_once __DIR__ . '/macro/HeaderParser.php';
-require_once __DIR__ . '/macro/HtmlContext.php';
-require_once __DIR__ . '/macro/HtmlBuilder.php';
 require_once __DIR__ . '/macro/PlmParser.php';
 require_once __DIR__ . '/macro/PlmState.php';
-require_once __DIR__ . '/macro/PlmReference.php';
 require_once __DIR__ . '/macro/PlmMacro.php';
 require_once __DIR__ . '/macro/PlmBom.php';
-require_once __DIR__ . '/macro/PlmPartList.php';
+require_once __DIR__ . '/macro/PlmAjax.php';
 
 
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
@@ -127,69 +128,24 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                 $this->error( $renderer, 'Invalid PLM header: ' . $renderContext->header);
                 return true;
             }
-
-            /*
-             * A single PlmReference instance is shared by
-             * the PLM component.
-             *
-             * It is responsible for resolving:
-             *
-             *     &_pk
-             *     $field
-             *     $_pk
-             *     $lookup._pk
-             *     %context.scope.field
-             *     @template
-             */            
             
-            // $struct =new PlmStruct();
-            $struct = null;
-            $reference = new PlmReference( $renderContext->state, $struct );
+            $writer = new RenderWriter($renderer);
+            $writer->enableCache(false);
 
             switch ($header->macro) {
 
                 case 'bom':
 
                     // /plm:bom > MC1210F-BLACK                    
-                    // $struct = new PlmStruct();
-                    $bom = new PlmBom( $renderer, $this->persist(), $header->context );
-                    $bom->render( $header, $renderContext->body );
+                    $bom = new PlmBom( $this->persist(), $header->context );
+                    $bom->render( $writer, $header, $renderContext->body );
 
                     return true;
 
-                case 'partlist':
+                case 'ajax':
 
-                    // /plm:partlist > variant-name
-                    $partList = new PlmPartList(
-                        $renderer,
-                        $this->persist(),
-                        $header->context
-                    );
-                    $partList->render($header, $renderContext->body);
-
-                    return true;
-
-                case 'table':
-
-                    $parser = new PlmParser();
-                    $table = new PlmTable( $renderer, $struct, $parser, $renderContext->state);
-
-                    $table->render( $header, $renderContext->body );
-                    return true;
-
-                case 'form':
-
-                    $parser = new PlmParser();
-                    $form = new PlmForm( $renderer, $struct, $parser, $renderContext->state);
-
-                    $form->render( $header, $renderContext->body );
-                    return true;
-
-                case 'select':
-
-                    $select = new PlmSelect( $renderer, $struct, $renderContext->state, $reference );
-
-                    $select->render( $header, $renderContext->body );
+                    $ajax = new PlmAjax($header->context);
+                    $ajax->render($writer, $header, $renderContext->body );
                     return true;
 
                 default:

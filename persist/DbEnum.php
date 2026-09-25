@@ -56,19 +56,17 @@ abstract class DbEnum extends DbObject
     /**
      * @return static[]
      */
-    public static function fetchAll(PlmDB $db): ?array
+    public static function fetchAll(PlmDB $db): array
     {
         $q = 'SELECT * FROM ' . static::getTableName() . ';';
 
         $result = $db->fetchAll($q);
-        if ($result) {
-            $res = [];
+        $res = [];
 
-            foreach ($result as $row) {
-                $res[] = new static($row);
-            }
+        foreach ($result as $row) {
+            $res[] = new static($row);
         }
 
-        return null;
+        return $res;
     }
 }

@@ -31,12 +31,22 @@ class PlmDB {
     }
 
     public function fetchSingle(string $queryString, ?array $params = null) : array {
-        $pdo = $this->db()->getPdo();
 
-        $stmt = $pdo->prepare($queryString);
-        $stmt->execute($params);
+        try {
+            $pdo = $this->db()->getPdo();
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt = $pdo->prepare($queryString);
+            $stmt->execute($params);
+
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result == false) {
+                throw new Exception('Query yielded no results: ' . $queryString . '. Parameters: ' . json_encode($params));
+            }
+        } catch (Exception $e) {
+            throw new Exception('Query contained an error: ' . $queryString . '. Parameters: ' . json_encode($params) . 'Error: ' . $e->getMessage());
+        }
+
+
         return $result;
     }
 

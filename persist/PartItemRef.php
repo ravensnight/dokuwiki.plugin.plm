@@ -11,7 +11,7 @@ class PartItemRef extends DbObject {
         $this->parentVersionId = $fields['parent_version_id'];
         $this->childVersionId = $fields['child_version_id'];
         $this->quantity = $fields['quantity'];
-        $this->designators = $fields['desginators'];
+        $this->designators = $fields['desginators'] ?? null;
     }
 
     public function createNew(int $parentVersionId, int $childVersionId, int $quantity = 1, ?string $designators = null) {
@@ -115,12 +115,14 @@ class PartItemRef extends DbObject {
     }
 
     public function appliesToVariant(PlmDB $db, int $variantPK) : bool {
-        $q = 'SELECT count * FROM plm_part_item_variant WHERE part_item_id = :itemLink AND variant_id = :variantPk;';
+        $q = 'SELECT COUNT(*) FROM plm_part_item_variant WHERE part_item_id = :itemLink AND variant_id = :variantPk;';
+
         $result = $db->fetchSingle($q, [
             'itemLink' => $this->pk,
-            'variant_id' => $variantPK
+            'variantPk' => $variantPK
         ]);
 
-        return ($result !== null);
+        if (empty($result)) return false;
+        return (reset($result) > 0);
     }
 }

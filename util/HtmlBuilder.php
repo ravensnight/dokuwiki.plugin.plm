@@ -3,13 +3,12 @@
 class HtmlBuilder {
 
     private array $stack = [];
-    private readonly Doku_Renderer $renderer;
+    private string $buffer = '';
 
     /**
      * Constructor
      */
-    public function __construct(Doku_Renderer $renderer) {
-        $this->renderer = $renderer;
+    public function __construct() {
     }
 
     /**
@@ -21,9 +20,11 @@ class HtmlBuilder {
         return $this;
     }
 
-    public function tag(string $tag, string $content, ?string $css_class = null, ?array $params = null) : self {
+    public function tag(string $tag, ?string $content, ?string $css_class = null, ?array $params = null) : self {
         $this->opn($tag, $css_class, $params);
-        $this->add($content);
+        if ($content !== null) {
+            $this->add($content);
+        }
         $this->cls();
 
         return $this;
@@ -31,11 +32,14 @@ class HtmlBuilder {
 
     public function add(string $line) : self {
         $lastIndex = array_key_last($this->stack);
+        $context = null;
+
         if ($lastIndex === null) {
-            $this->renderer->doc .= $line;
+            $this->buffer .= $line;
+        } else {
+            $this->stack[$lastIndex]->add($line);
         }
 
-        $this->stack[$lastIndex]->add($line);
         return $this;
     }
 
@@ -46,25 +50,18 @@ class HtmlBuilder {
         }
 
         $html = $context->build();
-        $lastIndex = array_key_last($this->stack);
-
-        if ($lastIndex === null) {
-            $this->renderer->doc .= $html;
-        } else {
-            $this->stack[$lastIndex]->add($html);
-        }
-
-        return $this;
+        return $this->add($html);
     }
 
     /**
      * Close every remaining context and write the resulting tree to the renderer.
      */
-    public function flush() : self {
+    public function flush(Writer $writer) : self {
         while ($this->stack !== []) {
             $this->cls();
         }
 
+        $writer->write($this->buffer);
         return $this;
     }
 }
