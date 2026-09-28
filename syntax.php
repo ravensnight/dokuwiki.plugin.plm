@@ -12,6 +12,10 @@ require_once __DIR__ . '/persist/ProductVariant.php';
 require_once __DIR__ . '/persist/VariantItemRef.php';
 require_once __DIR__ . '/persist/PlmDB.php';
 
+require_once __DIR__ . '/service/HtmlBaseFactory.php';
+require_once __DIR__ . '/service/PartListFactory.php';
+require_once __DIR__ . '/service/PartFormFactory.php';
+
 require_once __DIR__ . '/util/HtmlContext.php';
 require_once __DIR__ . '/util/HtmlBuilder.php';
 require_once __DIR__ . '/util/Writer.php';
@@ -26,7 +30,9 @@ require_once __DIR__ . '/macro/PlmState.php';
 require_once __DIR__ . '/macro/PlmMacro.php';
 require_once __DIR__ . '/macro/PlmBom.php';
 require_once __DIR__ . '/macro/PlmAjax.php';
-
+require_once __DIR__ . '/macro/PlmParts.php';
+require_once __DIR__ . '/macro/PlmPartEdit.php';
+require_once __DIR__ . '/macro/PlmVersions.php';
 
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 {
@@ -55,15 +61,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
     public function postConnect() {
         $this->Lexer->addExitPattern( self::exitPattern, 'plugin_plm');
-    }
-
-    private function persist() : PlmDB {
-        if ($this->plmdb !== null) {
-            return $this->plmdb;
-        }
-
-        $this->plmdb = new PlmDB();
-        return $this->plmdb;
     }
 
     public function handle( $match, $state, $pos, Doku_Handler $handler) {
@@ -117,7 +114,12 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
     }
 
-    private function renderBlock( Doku_Renderer $renderer, RenderContext $renderContext): bool {
+    private function renderBlock(Doku_Renderer $renderer, RenderContext $renderContext): bool {
+        $writer = new RenderWriter($renderer);
+        $writer->enableCache(false);
+
+        $html = new HtmlBuilder();
+
         try {
 
             /*
@@ -125,55 +127,58 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
              */
             $header = HeaderParser::parse($renderContext->header);
             if ($header === null) {
-                $this->error( $renderer, 'Invalid PLM header: ' . $renderContext->header);
+                $this->error( $html, 'Invalid PLM header: ' . $renderContext->header);
+                $html->flush($writer);
                 return true;
             }
             
-            $writer = new RenderWriter($renderer);
-            $writer->enableCache(false);
-
             switch ($header->macro) {
 
                 case 'bom':
 
                     // /plm:bom > MC1210F-BLACK                    
-                    $bom = new PlmBom( $this->persist(), $header->context );
-                    $bom->render( $writer, $header, $renderContext->body );
+                    $bom = new PlmBom( PlmDB::get(), $header->context );
+                    $bom->render($html, $header, $renderContext->body );
+                    break;
 
-                    return true;
+                case 'parts':
+                    $parts = new PlmParts($header->context);
+                    $parts->render($html, $header, $renderContext->body);
+                    break;
+
+                case 'partedit':
+                    $partedit = new PlmPartEdit($header->context);
+                    $partedit->render($html, $header, $renderContext->body);
+                    break;
+
+                case 'versions':
+                    $versions = new PlmVersions($header->context);
+                    $versions->render($html, $header, $renderContext->body);
+                    break;
 
                 case 'ajax':
-
                     $ajax = new PlmAjax($header->context);
-                    $ajax->render($writer, $header, $renderContext->body );
-                    return true;
+                    $ajax->render($html, $header, $renderContext->body );
+                    break;
 
                 default:
-
-                    $this->error( $renderer, 'Unknown PLM component: ' . $header->macro);
-                    return true;
+                    $this->error($html, 'Unknown PLM component: ' . $header->macro);
+                    break;
             }
+
+            $html->flush($writer);
+            return true;
 
         } catch (Throwable $e) {
 
-            $this->error(
-                $renderer,
-                'PLM: ' .
-                $e->getMessage()
-            );
+            $this->error($html, 'PLM: ' . json_encode($e->getTrace()) );
+            $html->flush($writer);
 
             return true;
         }
     }
 
-    private function error(
-        Doku_Renderer $renderer,
-        string $message
-    ): void {
-
-        $renderer->doc .=
-            '<div class="error">' .
-            hsc($message) .
-            '</div>';
+    private function error(HtmlBuilder $html, string $message ): void {
+        $html->tag('div', $message, 'error');
     }
 }

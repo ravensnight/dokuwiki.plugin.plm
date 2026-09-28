@@ -26,7 +26,7 @@ class PartItemRef extends DbObject {
     public static function byPK(PlmDB $db, int $pk) : ?static {
         /** @var string */
         $q = "SELECT * FROM  plm_part_item WHERE id = :pk;";
-        $result = $db->fetchSingle($q, [
+        $result = $db->querySingle($q, [
             'pk' => $pk
         ]);
 
@@ -117,12 +117,24 @@ class PartItemRef extends DbObject {
     public function appliesToVariant(PlmDB $db, int $variantPK) : bool {
         $q = 'SELECT COUNT(*) FROM plm_part_item_variant WHERE part_item_id = :itemLink AND variant_id = :variantPk;';
 
-        $result = $db->fetchSingle($q, [
+        $result = $db->querySingle($q, [
             'itemLink' => $this->pk,
             'variantPk' => $variantPK
         ]);
 
         if (empty($result)) return false;
         return (reset($result) > 0);
+    }
+
+    #[Override]
+    public function save(PlmDB $db)
+    {
+        throw new \Exception('Not implemented');
+    }
+
+    #[Override]
+    public function delete(PlmDB $db, bool $aprove)
+    {
+        throw new \Exception('Not implemented');
     }
 }

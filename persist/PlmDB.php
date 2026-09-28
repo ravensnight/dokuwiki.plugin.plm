@@ -9,7 +9,18 @@ class PlmDB {
     /** @var SQLiteDB $_db */
     private $_db;
 
-    public function __construct() {
+    /** @var PlmDB $_db */
+    private static $_plm = null;
+
+    private function __construct() {
+    }
+
+    public static function get() : PlmDB {
+        if (PlmDB::$_plm === null) {
+            PlmDB::$_plm = new PlmDB();
+        }
+
+        return PlmDB::$_plm;
     }
 
     private function db() : SQLiteDB {
@@ -30,7 +41,7 @@ class PlmDB {
         return $this->_db;
     }
 
-    public function fetchSingle(string $queryString, ?array $params = null) : array {
+    public function querySingle(string $queryString, ?array $params = null) : array {
 
         try {
             $pdo = $this->db()->getPdo();
@@ -39,8 +50,8 @@ class PlmDB {
             $stmt->execute($params);
 
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($result == false) {
-                throw new Exception('Query yielded no results: ' . $queryString . '. Parameters: ' . json_encode($params));
+            if ($result === false) {
+                return [];
             }
         } catch (Exception $e) {
             throw new Exception('Query contained an error: ' . $queryString . '. Parameters: ' . json_encode($params) . 'Error: ' . $e->getMessage());
@@ -59,5 +70,14 @@ class PlmDB {
 
         $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return $result;
+    }
+
+    /**
+     * Get the last inserted ID from the database for a specific table
+     */
+    public function lastInsertedId(string $tableName): int
+    {
+        $pdo = $this->db()->getPdo();
+        return $pdo->lastInsertId($tableName);
     }
 }

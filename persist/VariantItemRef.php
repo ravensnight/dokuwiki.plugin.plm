@@ -24,7 +24,7 @@ class VariantItemRef extends DbObject {
     public static function byPK(PlmDB $db, int $pk) : ?static {
         /** @var string */
         $q = "SELECT * FROM  plm_product_variant_item WHERE id = :pk;";
-        $result = $db->fetchSingle($q, [
+        $result = $db->querySingle($q, [
             'pk' => $pk
         ]);
 
@@ -82,5 +82,17 @@ class VariantItemRef extends DbObject {
     public function fetchParent(PlmDB $db): ?ProductVariant
     {
         return ProductVariant::byPK($db, $this->productVariantId);
+    }
+
+    #[Override]
+    public function save(PlmDB $db)
+    {
+        throw new \Exception('Not implemented');
+    }
+
+    #[Override]
+    public function delete(PlmDB $db, bool $aprove)
+    {
+        throw new \Exception('Not implemented');
     }
 }

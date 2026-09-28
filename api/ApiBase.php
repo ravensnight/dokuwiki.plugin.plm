@@ -8,12 +8,10 @@ if (!defined('DOKU_INC')) {
 
 abstract class ApiBase
 {
-    private readonly PlmDB $db;     
-    private readonly HtmlBuilder $out;
+    private readonly PlmDB $db;
 
     public function __construct(PlmDB $db) {
         $this->db = $db;
-        $this->out = new HtmlBuilder();
     }
 
     protected function db() : PlmDB {
@@ -45,7 +43,7 @@ abstract class ApiBase
         return $USERINFO['grps'] ?? [];
     }
 
-    protected static function error(int $status, string $message): never
+    public static function error(int $status, string $message): never
     {
         /**
          * @var HtmlBuilder out
@@ -99,11 +97,100 @@ abstract class ApiBase
         ApiBase::error(405, 'Method not allowed' );
     }
 
+    /**
+     * Create a standard form group with label and input field
+     * @param HtmlBuilder $out
+     * @param string $label
+     * @param string $name
+     * @param string $value
+     * @param bool $readonly
+     */
+    protected function formGroup(HtmlBuilder $out, string $label, string $name, string $value, bool $readonly = false)
+    {
+        $params = [];
+        if ($readonly) {
+            $params[ 'readonly' ] = 'readonly';
+        }
+
+        $out->opn('div', 'form-group');
+        
+        $this->label($out, $label);
+        $this->input($out, 'text', $value, $name, $params);
+
+        $out->cls(); // Close div
+    }
+
+    /**
+     * Create a category selection form group
+     * @param HtmlBuilder $out
+     * @param string $label
+     * @param string $name
+     * @param Category[] $categories
+     * @param mixed $selectedCategoryId
+     */
+    protected function createCategoryFormGroup(HtmlBuilder $out, string $label, string $name, array $categories, $selectedCategoryId)
+    {
+        $out->opn('div', 'form-group');
+        $this->label($out, $label);
+        
+        $out->opn('select', null, [
+            'name' => $name,
+        ]);
+
+        foreach ($categories as $category) {
+            $params = [
+                'value' => $category->pk,
+            ];
+
+            if ($category->pk === $selectedCategoryId) {
+                $params['selected'] = 'selected';
+            }
+
+            $out->tag('option', $category->description . ' (' . $category->name . ')', null, $params);
+        }
+
+        $out->cls() // Close select
+        ->cls(); // Close div
+    }
+
+    /**
+     * Create an HTML input tag with common attributes
+     * @param HtmlBuilder $out
+     * @param string $type
+     * @param string $value
+     * @param string $name (optional)
+     */
+    protected function input(HtmlBuilder $out, string $type, string $value, string $name, ?array $p = null)
+    {
+        $params = [
+            'type' => $type,
+            'name' => $name,
+            'value' => $value
+        ];
+
+        if ($p !== null) {
+            $params += $p;
+        }
+
+        $out->tag('input', null, null, $params);
+    }
+
+    /**
+     * Create a label element
+     * @param HtmlBuilder $out
+     * @param string $text
+     */
+    protected function label(HtmlBuilder $out, string $text)
+    {
+        $out->tag('label', $text);
+    }
+
     public static function handleRequest(PlmDB $db, string $path): void {
 
         $method = strtolower( $_SERVER['REQUEST_METHOD'] ?? 'get' );
         if (preg_match('#^v1/([^/]+)(?:/(.+))?$#', $path, $match)) {
 
+            $api = null;
             $apiName = $match[1];
             $nodePath = [];
 
@@ -115,12 +202,19 @@ abstract class ApiBase
 
                 case 'parts':
                     $api = new ApiPart($db);
-                    $api->handle($method, $nodePath);
+                    break;
+
+                case 'versions':
+                    $api = new ApiVersion($db);
                     break;
 
                 default:
                     ApiBase::error(404, 'PLM API not found: ' . $apiName);
                     break;
+            }
+
+             if ($api !== null) {
+                $api->handle($method, $nodePath);
             }
 
             return;
@@ -136,42 +230,43 @@ abstract class ApiBase
      */
     protected final function handle(string $method, array $nodePath) {
 
-        /**
-         * @var HtmlBuilder out
-         */
-        $out = new HtmlBuilder();
+        /** @var ResponseWriter w */
+        $w = new ResponseWriter();
 
+        /** @var HtmlBuilder out */
+        $out = new HtmlBuilder();
+        
+        $evt = null;
         switch ($method) {
-            case 'get' : 
-                $this->doGet($out, $nodePath);
+            case 'get' :
+                $evt = $this->doGet($out, $nodePath);
                 break;
 
             case 'post':
-                $this->doCreate($out, $nodePath);
-                break;
-
-            case 'put':
-                $this->doUpdate($out, $nodePath);
-                break;
-
-            case 'delete':
-                $this->doDelete($out, $nodePath);
+                $evt = $this->doPost($out, $nodePath);
                 break;
 
             default:
-                $this->methodNotAllowed();                
+                $this->methodNotAllowed();
+        }
+
+        if ($evt !== null) {
+            $w->additionalHeaders['hx-trigger'] = '{"' . $evt->name . '":' . json_encode($evt->details ?? 'null') . '}';
         }
 
         /**
          * @var ResponseWriter w
          */
-        $w = new ResponseWriter();
         $out->flush($w);
     }
 
-    protected abstract function doGet(HtmlBuilder $out, array $nodePath) : void;
-    protected abstract function doUpdate(HtmlBuilder $out, array $nodePath): void;
-    protected abstract function doCreate(HtmlBuilder $out, array $nodePath): void;
-    protected abstract function doDelete(HtmlBuilder $out, array $nodePath): void;
-}
+    /**
+     * @return Event - a html event to trigger
+     */
+    protected abstract function doGet(HtmlBuilder $out, array $nodePath) : Event;
 
+    /**
+     * @return Event - a html event to trigger
+     */
+    protected abstract function doPost(HtmlBuilder $out, array $nodePath): Event;
+}

@@ -33,7 +33,7 @@ abstract class DbEnum extends DbObject
     {
         $q = 'SELECT * FROM ' . static::getTableName() . ' WHERE id = :pk;';
         
-        $result = $db->fetchSingle($q, ['pk' => $pk]);
+        $result = $db->querySingle($q, ['pk' => $pk]);
         if ($result) {
             return new static($result);
         }
@@ -45,7 +45,7 @@ abstract class DbEnum extends DbObject
     {
         $q = 'SELECT * FROM ' . static::getTableName() . 'WHERE name = :name;';
 
-        $result = $db->fetchSingle($q, ['name' => $name]);
+        $result = $db->querySingle($q, ['name' => $name]);
         if ($result) {
             return new static($result);
         }
@@ -68,5 +68,17 @@ abstract class DbEnum extends DbObject
         }
 
         return $res;
+    }
+
+    #[Override]
+    public function save(PlmDB $db)
+    {
+        throw new \Exception('Not implemented');
+    }
+
+    #[Override]
+    public function delete(PlmDB $db, bool $aprove)
+    {
+        throw new \Exception('Not implemented');
     }
 }

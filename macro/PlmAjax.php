@@ -29,9 +29,9 @@ class PlmAjax extends PlmMacro
         <p>Parts werden geladen ...</p>
         </div>
      */
-    protected function renderParts(string $id) {
+    protected function renderParts(HtmlBuilder $html, string $id) {
 
-        $this->out()->opn('div', 'partlist', [ 
+        $html->opn('div', 'partlist', [ 
             'id' => $id,
             'hx-get' => $this->PREFIX . 'parts',
             'hx-trigger' => 'load',
@@ -40,25 +40,22 @@ class PlmAjax extends PlmMacro
             'hx-boost' => 'true'
         ]);
 
-        $this->out()->tag('p', 'Loading...');
-        $this->out()->cls();
+        $html->tag('p', 'Loading ... ');
+        $html->cls(); // div
     }
 
-    public function render(Writer $writer, MacroHeader $header, ?string $body = null): void
+    public function render(HtmlBuilder $html, MacroHeader $header, ?string $body = null): void
     {
-        $this->out()->opn('div', 'plm');
+        $html->opn('div', 'plm', [ 'id' => 'plm' ]);
 
         switch ($this->function) {
-
             case 'parts':
-                $this->renderParts($header->reference);
+                $this->renderParts($html, $header->reference);
                 break;
 
             default:
-                $this->error("Unknown plm:ajax > <function>");
+                $this->error($html, "Unknown plm:ajax > <function>");
                 break;
         }
-
-        $this->out()->cls()->flush($writer);
     }
 }

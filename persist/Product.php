@@ -27,7 +27,7 @@ class Product extends DbObject {
      * Find product by name
      */
     public static function byPK(PlmDB $db, int $pk): ?static {
-        $result = $db->fetchSingle("SELECT * FROM plm_product WHERE id = :pk", [
+        $result = $db->querySingle("SELECT * FROM plm_product WHERE id = :pk", [
             'pk' => $pk
         ]);
 
@@ -43,7 +43,7 @@ class Product extends DbObject {
      * Find product by name
      */
     public static function byName(PlmDB $db, string $name) : ?self {
-        $result = $db->fetchSingle("SELECT * FROM plm_product WHERE product_id = :product_id", [
+        $result = $db->querySingle("SELECT * FROM plm_product WHERE product_id = :product_id", [
             'product_id' => $name
         ]);
 
@@ -59,5 +59,17 @@ class Product extends DbObject {
      */
     public function fetchVariants(PlmDB $db) : ?array {
         return ProductVariant::byProductId($db, $this->pk);
+    }
+
+    #[Override]
+    public function save(PlmDB $db)
+    {
+        throw new \Exception('Not implemented');
+    }
+
+    #[Override]
+    public function delete(PlmDB $db, bool $aprove)
+    {
+        throw new \Exception('Not implemented');
     }
 }

@@ -29,18 +29,16 @@ class PlmBom extends PlmMacro {
     /**
      * Render the complete BOM.
      */
-    public function render(Writer $writer, MacroHeader $header, ?string $content = null): void
+    public function render(HtmlBuilder $html, MacroHeader $header, ?string $content = null): void
     {
-        $this->out()
+        $html
             ->opn('div', 'plm-bom')
             ->opn('div', 'plm-bom-variant')
             ->opn('h2')->add(hsc($this->variantName))->cls()
             ->cls();
 
         if ($this->variantName === '') {
-            $this->out()
-                ->tag('div', 'No product variant specified.', 'plm-bom-empty')
-                ->flush($writer);
+            $html->tag('div', 'No product variant specified.', 'plm-bom-empty');
             return;
         }
 
@@ -49,14 +47,12 @@ class PlmBom extends PlmMacro {
         */
         $this->variant = ProductVariant::byName($this->db, $this->variantName);
         if ($this->variant === null) {
-            $this->out()
-                ->tag('div', 'Product variant not found.', 'plm-bom-empty')
-                ->flush($writer);
+            $html->tag('div', 'Product variant not found.', 'plm-bom-empty');
             return;
         }
 
         // Variant & Product Attributes
-        $this->renderVariantAttrs($this->variant);
+        $this->renderVariantAttrs($html, $this->variant);
         
         /** 
          * Fetch Part Versions
@@ -64,13 +60,11 @@ class PlmBom extends PlmMacro {
          */
         $variantItems = $this->variant->fetchChildren($this->db);
         if (!$variantItems) {
-            $this->out()
-                ->tag('div', 'No BOM items found.', 'plm-bom-empty')
-                ->flush($writer);
+            $html->tag('div', 'No BOM items found.', 'plm-bom-empty');
             return;
         }
 
-        $this->out()->opn('div', 'plm-bom-tree');
+        $html->opn('div', 'plm-bom-tree');
 
         /*
          * Loop the children
@@ -81,10 +75,8 @@ class PlmBom extends PlmMacro {
             $indexPath = [];
             $indexPath[] = $nodeIndex;
 
-            $this->renderVariantItemRef($variantItem, 0, $indexPath, []);
+            $this->renderVariantItemRef($html, $variantItem, 0, $indexPath, []);
         }
-
-        $this->out()->cls()->flush($writer);
     }
 
     /**
@@ -92,8 +84,8 @@ class PlmBom extends PlmMacro {
      * @param ProductVariant $variant
      *
      */
-    private function renderVariantAttrs(ProductVariant $variant): void {
-        $this->out()->opn('ul', 'plm-bom-node-attrlist');
+    private function renderVariantAttrs(HtmlBuilder $html, ProductVariant $variant): void {
+        $html->opn('ul', 'plm-bom-node-attrlist');
 
         $attrs = [
             'Variant Name' => $variant->name,
@@ -106,9 +98,9 @@ class PlmBom extends PlmMacro {
             $attrs['Owned by'] = hsc($product->name);
         }
 
-        $this->renderAttributeList($attrs);
+        $this->renderAttributeList($html, $attrs);
 
-        $this->out()->cls();
+        $html->cls();
     }
 
     private function collectVariantItemRefAttrs(VariantItemRef $itemRef): array {
@@ -157,25 +149,25 @@ class PlmBom extends PlmMacro {
     /**
      * @param array<string, string> $attributes
      */
-    private function renderAttributeList(array $attributes): void {
-        $this->out()->opn('div', 'plm-bom-node-attrlist');
+    private function renderAttributeList(HtmlBuilder $html, array $attributes): void {
+        $html->opn('div', 'plm-bom-node-attrlist');
 
         foreach ($attributes as $name => $value) {
             $cssClass = strtolower(str_replace([' ', ':'], ['_',''], trim($name)));
-            $this->renderAttribute($name, $cssClass, $value ?? '');
+            $this->renderAttribute($html, $name, $cssClass, $value ?? '');
         }
 
-        $this->out()->cls();
+        $html->cls();
     }
 
 
-    private function renderPartHeader(PartVersion $version, array $indexPath) : void {
+    private function renderPartHeader(HtmlBuilder $html, PartVersion $version, array $indexPath) : void {
 
         /** @var Part */
         $part = $version->fetchPart($this->db);
 
         if ($part === null) {
-            $this->out()->opn('h3')
+            $html->opn('h3')
                 ->add(hsc(implode('.', $indexPath)))
                 ->add(' ')
                 ->add(hsc($version->name))
@@ -193,7 +185,7 @@ class PlmBom extends PlmMacro {
             $title = $title . ' : ' . $part->description;
         }
 
-        $this->out()->opn('h3')
+        $html->opn('h3')
             ->add(hsc(implode('.', $indexPath)))
             ->add(' ')
             ->add(hsc($title))
@@ -210,10 +202,10 @@ class PlmBom extends PlmMacro {
             $attrs['Category'] = $cat->description . ' (' . $cat->name . ')';
         }
 
-        $this->renderAttributeList($attrs);
+        $this->renderAttributeList($html, $attrs);
     }
 
-    private function renderPartVersionChildren(PartVersion $version, int $level, array $indexPath, array $itemPath) : void {
+    private function renderPartVersionChildren(HtmlBuilder $html, PartVersion $version, int $level, array $indexPath, array $itemPath) : void {
 
         /** @var PartItemRef[] */
         $children = $version->fetchChildren($this->db);
@@ -231,14 +223,14 @@ class PlmBom extends PlmMacro {
             $nextIndexPath = $indexPath;
             $nextIndexPath[] = $itemIndex;
 
-            $this->renderPartItemRef($itemRef, $level + 1, $nextIndexPath, $itemPath);
+            $this->renderPartItemRef($html, $itemRef, $level + 1, $nextIndexPath, $itemPath);
         }
     }
 
     /**
      * Render variant item node.
      */
-    private function renderVariantItemRef(VariantItemRef $itemRef,  int $level, array $indexPath, array $itemPath ) : void {
+    private function renderVariantItemRef(HtmlBuilder $html, VariantItemRef $itemRef,  int $level, array $indexPath, array $itemPath ) : void {
 
         $childVersion = $itemRef->fetchChild($this->db);
         if ($childVersion === null) {
@@ -250,15 +242,15 @@ class PlmBom extends PlmMacro {
          */
         $versionName = $childVersion->name;
         if (isset($itemPath[$versionName])) {
-            $this->renderCycleNode($versionName, $itemRef->quantity);
+            $this->renderCycleNode($html, $versionName, $itemRef->quantity);
             return;
         }
 
         $level = count($indexPath);
-        $this->out()->opn('div', 'plm-bom-node plm-bom-level' . $level);
+        $html->opn('div', 'plm-bom-node plm-bom-level' . $level);
 
         /** Render part header */
-        $this->renderPartHeader($childVersion, $indexPath);
+        $this->renderPartHeader($html, $childVersion, $indexPath);
 
         /** @var array<string, mixed> */
         $attributes = [];
@@ -270,22 +262,22 @@ class PlmBom extends PlmMacro {
         $attributes += $this->collectVariantItemRefAttrs($itemRef);
 
         /** Render all attributes */
-        $this->renderAttributeList($attributes);
+        $this->renderAttributeList($html, $attributes);
 
         /*
          * Append the current version in the recursion path.
         */
         $nextItemPath = $itemPath;
         $nextItemPath[$versionName] = true;
-        $this->renderPartVersionChildren($childVersion, $level, $indexPath, $nextItemPath);
+        $this->renderPartVersionChildren($html, $childVersion, $level, $indexPath, $nextItemPath);
 
-        $this->out()->cls();
+        $html->cls();
     }
 
     /**
      * Render one part version recursively.
      */
-    private function renderPartItemRef( PartItemRef $itemRef, int $level, array $indexPath, array $itemPath): void {
+    private function renderPartItemRef(HtmlBuilder $html, PartItemRef $itemRef, int $level, array $indexPath, array $itemPath): void {
 
         if (!$itemRef->appliesToVariant($this->db, $this->variant->pk)) {
             return;
@@ -302,15 +294,15 @@ class PlmBom extends PlmMacro {
          * Protect against cyclic BOM structures.
         */
         if (isset($itemPath[$versionName])) {
-            $this->renderCycleNode($versionName, $itemRef->quantity);
+            $this->renderCycleNode($html, $versionName, $itemRef->quantity);
             return;
         }
 
         $level = count($indexPath);
-        $this->out()->opn('div', 'plm-bom-node plm-bom-level' . $level);
+        $html->opn('div', 'plm-bom-node plm-bom-level' . $level);
 
         /** Render part heading and attrs */
-        $this->renderPartHeader($childVersion, $indexPath);
+        $this->renderPartHeader($html, $childVersion, $indexPath);
 
         /** @var array<string, mixed> */
         $attributes = [];
@@ -322,20 +314,20 @@ class PlmBom extends PlmMacro {
         $attributes += $this->collectPartItemRefAttrs($itemRef);
 
         /** Render all attributes */
-        $this->renderAttributeList($attributes);
+        $this->renderAttributeList($html, $attributes);
 
         /*
          * Append the current version in the recursion path.
         */
         $nextItemPath = $itemPath;
         $nextItemPath[$versionName] = true;
-        $this->renderPartVersionChildren($childVersion, $level, $indexPath, $nextItemPath);
+        $this->renderPartVersionChildren($html, $childVersion, $level, $indexPath, $nextItemPath);
 
-        $this->out()->cls();
+        $html->cls();
     }
 
-    private function renderAttribute(string $name, string $cssClass, string $value): void {
-        $this->out()
+    private function renderAttribute(HtmlBuilder $html, string $name, string $cssClass, string $value): void {
+        $html
             ->opn('div', 'plm-bom-node-attr ' . $cssClass)
             ->tag('span', $name . ': ', 'key')
             ->tag('span', empty($value) ? 'n/a' : (string) $value, 'value')
@@ -350,8 +342,8 @@ class PlmBom extends PlmMacro {
      * @param int    $level
      *
      */
-    private function renderCycleNode( string $versionName, $quantity ): void {
-        $this->out()
+    private function renderCycleNode(HtmlBuilder $html, string $versionName, $quantity ): void {
+        $html
             ->opn('div', 'plm-bom-node plm-bom-cycle')
             ->opn('strong')
             ->add(hsc($versionName))
@@ -361,7 +353,7 @@ class PlmBom extends PlmMacro {
             ->add('(cyclic BOM reference)')
             ->cls();
 
-        $this->renderAttribute('Qantity', 'quantity', $quantity);
-        $this->out()->cls();
+        $this->renderAttribute($html, 'Qantity', 'quantity', $quantity);
+        $html->cls();
     }
 }

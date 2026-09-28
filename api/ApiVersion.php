@@ -4,7 +4,7 @@ if (!defined('DOKU_INC')) {
     die();
 }
 
-class ApiPart extends ApiBase {
+class ApiVersion extends ApiBase {
 
     public function __construct(PlmDB $db) {
         parent::__construct($db);
@@ -14,18 +14,18 @@ class ApiPart extends ApiBase {
     {
         $this->requireRole('reader');
 
-        $evt = null;
         if (!empty($nodePath)) {
-            $evt = $this->doGetSingle($out, $nodePath);
+            return $this->doGetSingle($out, $nodePath);
         } else {
-            $evt = $this->doGetList($out, $nodePath);
+            return $this->doGetList($out, $nodePath);
         }
-            
-        return $evt;
     }
 
     protected function doGetSingle(HtmlBuilder $out, array $nodePath): Event
     {
+        ApiBase::error(400, 'Not supported yet.');
+
+        /**
         $this->requireRole('reader');
 
         $id = $nodePath[0];
@@ -33,43 +33,56 @@ class ApiPart extends ApiBase {
 
         if (!$part) {
             PartFormFactory::renderCreateForm($out, $this->db());
-            return Event::reset('part');
         } else {
             PartFormFactory::renderEditForm($out, $this->db(), $part);
-            return Event::select('part', $part->pk);
         }
+
+        return 'partselect';
+         */
+        return Event::none('version');
     }
 
     protected function doGetList(HtmlBuilder $out, array $nodePath): Event
     {
         $this->requireRole('reader');
-        PartListFactory::renderPartList($out, $this->db());
-        return Event::reset('part');
+
+        global $INPUT;
+        $partId = $INPUT->get->int('partId');
+
+        if ($partId !== 0) {
+            PartListFactory::renderPartVersionList($out, PlmDB::get(), $partId);
+        }
+
+        return Event::reset('version');
     }
 
     protected function doPost(HtmlBuilder $out, array $nodePath): Event
-    {
+    {        
         // Access form data through DokuWiki's global input system
         global $INPUT;
         $submitAction = $INPUT->post->str('action', '');
 
         switch ($submitAction) {
+            /**
             case 'create':
-                return $this->doCreate($out, $nodePath);
+                $this->doCreate($out, $nodePath);
+                return 'partupdate';
 
             case 'save':
-                return $this->doUpdate($out, $nodePath);
-
-            case 'delete':
-                return $this->doDelete($out, $nodePath);
+                $this->doUpdate($out, $nodePath);
+                return 'partupdate';
 
             case 'reset':
                 PartFormFactory::renderCreateForm($out, $this->db());
-                return Event::reset('part');
+                return null;
 
+            case 'delete':
+                $this->doDelete($out, $nodePath);
+                return 'partupdate';
+            */
             default:
                 ApiBase::error(400, 'Unknown submit action ' . $submitAction);
-                return Event::none('part');
+                return Event::none('version');
         }
     }
 
@@ -96,6 +109,7 @@ class ApiPart extends ApiBase {
         global $INPUT;
 
         // Get form data for creating new part
+        /**
         $ipn = $INPUT->post->str('ipn', '');
         $description = $INPUT->post->str('description', '');
         $categoryId = $INPUT->post->int('category', 0);
@@ -111,7 +125,9 @@ class ApiPart extends ApiBase {
 
         // Show the edit form for the newly created part
         PartFormFactory::renderEditForm($out, $this->db(), $part);
-        return Event::change('part', $part->pk);
+        */
+        $this->error(400, "Not supported yet.");
+        return Event::none('version');
     }
 
     protected function doUpdate(HtmlBuilder $out, array $nodePath): Event {
@@ -119,6 +135,7 @@ class ApiPart extends ApiBase {
 
         $this->requireRole('author');
 
+        /**
         $partId = $this->getPk($nodePath);
         $part = Part::byPK($this->db(), $partId);
         if ($part) {
@@ -138,18 +155,20 @@ class ApiPart extends ApiBase {
 
             // Show the updated form
             PartFormFactory::renderEditForm($out, $this->db(), $part);
-            return Event::change('part', $part->pk);
         } else {
             // If part doesn't exist, create a new one
             PartFormFactory::renderCreateForm($out, $this->db());
-            return Event::reset('part');
         }
+        */
+        $this->error(400, "Not supported yet.");
+        return Event::none('version');
     }
 
     protected function doDelete(HtmlBuilder $out, array $nodePath): Event
     {
         $this->requireRole('admin');
 
+        /**
         $partId = $this->getPk($nodePath);
         $part = Part::byPK($this->db(), $partId);
         if ($part) {
@@ -157,6 +176,9 @@ class ApiPart extends ApiBase {
         }
 
         PartFormFactory::renderCreateForm($out, $this->db());
-        return Event::change('part', $part->pk);
+        */
+
+        $this->error(400, "Not supported yet.");
+        return Event::none('version');
     }        
 }

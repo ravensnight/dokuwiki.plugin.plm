@@ -29,7 +29,7 @@ class PartVersion extends DbObject {
 
     public static function byPK(PlmDB $db, int $pk): ?static
     {
-        $result = $db->fetchSingle("SELECT * FROM  plm_part_version WHERE id = :pk;", [
+        $result = $db->querySingle("SELECT * FROM  plm_part_version WHERE id = :pk;", [
             'pk' => $pk
         ]);
 
@@ -43,7 +43,7 @@ class PartVersion extends DbObject {
     public static function byName(PlmDB $db, string $name): ?self
     {
 
-        $result = $db->fetchSingle("SELECT * FROM  plm_part_version WHERE version_id = :version_id;", [
+        $result = $db->querySingle("SELECT * FROM  plm_part_version WHERE version_id = :version_id;", [
             'version_id' => $name
         ]);
 
@@ -104,5 +104,17 @@ class PartVersion extends DbObject {
     public function fetchStatus(PlmDB $db): Status
     {
         return Status::byPK($db, $this->statusId);
+    }
+
+    #[Override]
+    public function save(PlmDB $db)
+    {
+        throw new \Exception('Not implemented');
+    }
+
+    #[Override]
+    public function delete(PlmDB $db, bool $aprove)
+    {
+        throw new \Exception('Not implemented');
     }
 }
