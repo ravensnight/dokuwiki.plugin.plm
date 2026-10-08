@@ -1,5 +1,7 @@
 <?php 
 
+require_once __DIR__ . '/HtmlContext.php';
+
 class HtmlBuilder {
 
     private array $stack = [];
@@ -51,6 +53,15 @@ class HtmlBuilder {
 
         $html = $context->build();
         return $this->add($html);
+    }
+
+    /**
+     * Get the current HTML content as string
+     * 
+     * @return string The accumulated HTML content
+     */
+    public function getHtml() : string {
+        return $this->buffer;
     }
 
     /**

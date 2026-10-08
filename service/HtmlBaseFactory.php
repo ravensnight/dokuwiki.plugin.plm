@@ -77,4 +77,26 @@ class HtmlBaseFactory {
         $out->cls(); // Close select        
         $out->cls(); // Close form-group
     }
+
+    public static function createStatusFormGroup(HtmlBuilder $out, string $label, string $name, array $status, int $selectedStatusId): void
+    {
+        $out->opn('div', 'form-group');
+        HtmlBaseFactory::label($out, $label, $name);
+
+        // Create dropdown for categories
+        $out->opn('select', null, ['name' => $name, 'id' => $name]);
+        foreach ($status as $s) {
+            $params = [
+                'value' => $s->pk
+            ];
+
+            if ($s->pk === $selectedStatusId) {
+                $params['selected'] = 'selected';
+            }
+
+            $out->tag('option', $s->name, null, $params);
+        }
+        $out->cls(); // Close select        
+        $out->cls(); // Close form-group
+    }
 }

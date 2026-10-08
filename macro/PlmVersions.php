@@ -11,13 +11,16 @@ class PlmVersions extends PlmMacro
     private string $PREFIX = '/doku.php?plmapi=v1/';
     private string $ctx;
 
-    public function __construct(string $context)
+    public function init(mixed $config): void
     {
-        parent::__construct();
-        $this->ctx = trim($context);
+        if (!isset($config['id'])) {
+            throw new Exception('plm:versions - missing attribute id.');
+        }
+
+        $this->ctx = trim($config['id']);
     }
 
-    public function render(HtmlBuilder $html, MacroHeader $header, ?string $body = null): void
+    public function render(HtmlBuilder $html): void
     {
         global $INPUT;
 
@@ -33,7 +36,6 @@ class PlmVersions extends PlmMacro
         $db = PlmDB::get();
 
         $html->tag('div', 'No part selcted', 'info');
-
         $html->cls(); // div
     }
 }

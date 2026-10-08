@@ -1,0 +1,24 @@
+[
+    {
+        "tag": "div",
+        "attrs": {
+            "class": "container"
+        },
+        "content": [
+            {
+                "tag": "h1",
+                "attrs": {
+                    "class": "title"
+                },
+                "content": "Hello World"
+            },
+            {
+                "tag": "p",
+                "attrs": {
+                    "class": "description"
+                },
+                "content": "This demonstrates array of tag nodes"
+            }
+        ]
+    }
+]

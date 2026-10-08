@@ -22,23 +22,19 @@ require_once __DIR__ . '/util/Writer.php';
 require_once __DIR__ . '/util/RenderWriter.php';
 require_once __DIR__ . '/util/ResponseWriter.php';
 
-require_once __DIR__ . '/macro/MacroHeader.php';
 require_once __DIR__ . '/macro/RenderContext.php';
-require_once __DIR__ . '/macro/HeaderParser.php';
-require_once __DIR__ . '/macro/PlmParser.php';
-require_once __DIR__ . '/macro/PlmState.php';
 require_once __DIR__ . '/macro/PlmMacro.php';
 require_once __DIR__ . '/macro/PlmBom.php';
-require_once __DIR__ . '/macro/PlmAjax.php';
 require_once __DIR__ . '/macro/PlmParts.php';
 require_once __DIR__ . '/macro/PlmPartEdit.php';
 require_once __DIR__ . '/macro/PlmVersions.php';
 
+use dokuwiki\Parsing\Handler;
+
 class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 {
-    private const entryPattern = '\/plm:(?=[a-zA-Z0-9_-]+)';
-    private const exitPattern = '\/plm';
-
+    private const entryPattern = '<!plm:';
+    private const exitPattern = '!>';
 
     /** @var PlmDB $plmdb */
     private $plmdb;
@@ -63,20 +59,20 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         $this->Lexer->addExitPattern( self::exitPattern, 'plugin_plm');
     }
 
-    public function handle( $match, $state, $pos, Doku_Handler $handler) {
+    public function handle( $match, $state, $pos, Handler $handler) {
+
         switch ($state) {
 
             case DOKU_LEXER_ENTER:                
                 return [ 'enter' => true ];
 
             case DOKU_LEXER_UNMATCHED:
-                return [ 'content' => $match ];
+                return [ 'content' => $match ];                
 
             case DOKU_LEXER_EXIT:
-                return [ 'exit' => true];
+                return [ 'exit' => true ];
 
             default:
-                echo "State: " . $state;
                 return null;
         }
     }
@@ -87,26 +83,36 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             return false;
         }
 
+        /** @var RenderContext[] $renderContext */
         static $renderContext = [];
         $rendererId = spl_object_id($renderer);
 
         if (!isset($renderContext[$rendererId])) {
-            $renderContext[$rendererId] = RenderContext::createEmpty(new PlmState());
+            // create the rendercontext, if not exising yet.
+            $renderContext[$rendererId] = RenderContext::create();
         }
-
+        
         if (isset($data['enter'])) {
+            // clear the context on enter
             $renderContext[$rendererId]->clear();
             return true;
         }
         elseif (isset($data['exit'])) {
-            /** @var RenderContext */
+            // remove the render context on exit and send to 
+            // rendering function
+
+            /** @var RenderContext $context */
             $context = $renderContext[$rendererId];
             unset($renderContext[$rendererId]);
 
             return $this->renderBlock($renderer, $context);
         }
         elseif (isset($data['content'])) {
-            $renderContext[$rendererId]->fromMacroContent($data['content']);
+
+            /** @var string $content */
+            $content = $data['content'];
+
+            $renderContext[$rendererId]->parse($content);
             return true;
         }
 
@@ -114,56 +120,50 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
     }
 
-    private function renderBlock(Doku_Renderer $renderer, RenderContext $renderContext): bool {
+    private function renderBlock(Doku_Renderer $renderer, RenderContext $context): bool {
+
         $writer = new RenderWriter($renderer);
         $writer->enableCache(false);
 
         $html = new HtmlBuilder();
+        try {                        
 
-        try {
+            $macro = null;
 
-            /*
-             * Everything else uses the normal PLM header syntax.
-             */
-            $header = HeaderParser::parse($renderContext->header);
-            if ($header === null) {
-                $this->error( $html, 'Invalid PLM header: ' . $renderContext->header);
-                $html->flush($writer);
-                return true;
-            }
-            
-            switch ($header->macro) {
+            switch ($context->type) {
 
                 case 'bom':
 
-                    // /plm:bom > MC1210F-BLACK                    
-                    $bom = new PlmBom( PlmDB::get(), $header->context );
-                    $bom->render($html, $header, $renderContext->body );
+                    // plm:bom > MC1210F-BLACK                    
+                    $macro = new PlmBom(PlmDB::get());
                     break;
 
                 case 'parts':
-                    $parts = new PlmParts($header->context);
-                    $parts->render($html, $header, $renderContext->body);
+                    $macro = new PlmParts();
                     break;
 
                 case 'partedit':
-                    $partedit = new PlmPartEdit($header->context);
-                    $partedit->render($html, $header, $renderContext->body);
+                    $macro = new PlmPartEdit();
                     break;
 
                 case 'versions':
-                    $versions = new PlmVersions($header->context);
-                    $versions->render($html, $header, $renderContext->body);
-                    break;
-
-                case 'ajax':
-                    $ajax = new PlmAjax($header->context);
-                    $ajax->render($html, $header, $renderContext->body );
+                    $macro = new PlmVersions();
                     break;
 
                 default:
-                    $this->error($html, 'Unknown PLM component: ' . $header->macro);
+                    $this->error($html, 'Unknown PLM component: ' . $context->type);
                     break;
+            }
+
+            if ($macro === null) {
+                $this->error($html, "PLM Internal Error: Macro instance not created.");
+            } else {
+                try {
+                    $macro->init($context->config ?? []);
+                    $macro->render($html);
+                    } catch (Exception $e) {
+                    $this->error($html, "PLM Macro Initialization failed. " . $e->getMessage());
+                }
             }
 
             $html->flush($writer);

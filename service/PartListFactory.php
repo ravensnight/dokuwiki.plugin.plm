@@ -65,7 +65,7 @@ class PartListFactory {
             ->opn('thead')
             ->opn('tr')
             ->tag('th', 'ID', 'id')
-            ->tag('th', 'Name', 'ipn')
+            ->tag('th', 'Name', 'name')
             ->tag('th', 'Major Version', 'major')
             ->tag('th', 'Revision', 'revision')
             ->tag('th', 'Status', 'status')
@@ -81,7 +81,7 @@ class PartListFactory {
 
             $html->opn('tr')
                 ->tag('td', $v->pk, 'id')
-                ->opn('td', 'Name')
+                ->opn('td', 'name')
                 ->opn('a', null, [
                     'href' => '/doku.php?plmapi=v1/versions/' . $v->pk,
                     'hx-get' => '/doku.php?plmapi=v1/versions/' . $v->pk,

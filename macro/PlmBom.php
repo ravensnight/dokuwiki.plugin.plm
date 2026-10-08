@@ -5,54 +5,50 @@
  */
 class PlmBom extends PlmMacro {
 
-
-
-    private readonly string $variantName;
     private readonly PlmDB $db;
 
-    /**
-     * @var ProductVariant
-     */
-    private $variant = null;
+    private string $variantName = '';
+    private ?ProductVariant $variant = null;
 
     /**
      * @param PlmDb $db
-     * @param string $variantName
      */
-    public function __construct(PlmDb $db, string $variantName ) {
+    public function __construct(PlmDb $db) {
         parent::__construct();
-
         $this->db = $db;
-        $this->variantName = trim($variantName);
     }
 
+    public function init(mixed $config) : void {
+        if (!isset($config['variant'])) {
+            throw new Exception("plm:bom - Attribute 'variant' not given!");
+        }
+
+        $this->variantName = trim($config['variant']);
+        if ($this->variantName === '') {
+            throw new Exception("plm:bom - Attribute variant is empty!");
+        }
+
+        /** Acquire product variant */
+        $this->variant = ProductVariant::byName($this->db, $this->variantName);
+        if ($this->variant === null) {
+            throw new Exception('plm:bom - Product variant not found: ' . $this->variantName);
+        }
+    }
+ 
     /**
      * Render the complete BOM.
      */
-    public function render(HtmlBuilder $html, MacroHeader $header, ?string $content = null): void
+    public function render(HtmlBuilder $html): void
     {
+
         $html
             ->opn('div', 'plm-bom')
             ->opn('div', 'plm-bom-variant')
             ->opn('h2')->add(hsc($this->variantName))->cls()
             ->cls();
 
-        if ($this->variantName === '') {
-            $html->tag('div', 'No product variant specified.', 'plm-bom-empty');
-            return;
-        }
-
-        /**
-        * Acquire product variant
-        */
-        $this->variant = ProductVariant::byName($this->db, $this->variantName);
-        if ($this->variant === null) {
-            $html->tag('div', 'Product variant not found.', 'plm-bom-empty');
-            return;
-        }
-
         // Variant & Product Attributes
-        $this->renderVariantAttrs($html, $this->variant);
+        $this->renderVariantAttrs($html);
         
         /** 
          * Fetch Part Versions
@@ -84,22 +80,21 @@ class PlmBom extends PlmMacro {
      * @param ProductVariant $variant
      *
      */
-    private function renderVariantAttrs(HtmlBuilder $html, ProductVariant $variant): void {
+    private function renderVariantAttrs(HtmlBuilder $html): void {
         $html->opn('ul', 'plm-bom-node-attrlist');
 
         $attrs = [
-            'Variant Name' => $variant->name,
-            'Description' => $variant->description
+            'Variant Name' => $this->variant->name,
+            'Description' => $this->variant->description
         ];
 
         /** @var Product */
-        $product = $variant->fetchProduct($this->db);
+        $product = $this->variant->fetchProduct($this->db);
         if ($product) {
             $attrs['Owned by'] = hsc($product->name);
         }
 
         $this->renderAttributeList($html, $attrs);
-
         $html->cls();
     }
 
@@ -336,11 +331,6 @@ class PlmBom extends PlmMacro {
 
     /**
      * Render cycle marker.
-     *
-     * @param string $versionId
-     * @param mixed  $quantity
-     * @param int    $level
-     *
      */
     private function renderCycleNode(HtmlBuilder $html, string $versionName, $quantity ): void {
         $html

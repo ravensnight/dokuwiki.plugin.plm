@@ -9,15 +9,17 @@
 class PlmParts extends PlmMacro
 {
     private string $PREFIX = '/doku.php?plmapi=v1/';
-    private string $ctx;
+    private string $ctx = '';
 
-    public function __construct(string $context)
-    {
-        parent::__construct();
-        $this->ctx = trim($context);
-    }
+    public function init(mixed $config) : void {
+        if (!isset($config['id'])) {
+            throw new Exception('plm:parts - missing attribute id.');
+        }
 
-    public function render(HtmlBuilder $html, MacroHeader $header, ?string $body = null): void
+        $this->ctx = trim($config['id']);
+    }    
+
+    public function render(HtmlBuilder $html): void
     {
         $html->opn('div', 'plm_parts', [
             'id' => $this->ctx,

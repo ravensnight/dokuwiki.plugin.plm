@@ -1,0 +1,23 @@
+[
+    {
+        "tag": "div",
+        "attrs": {
+            "class": "container"
+        },
+        "content": "Hello World"
+    },
+    {
+        "tag": "h1",
+        "attrs": {
+            "class": "title"
+        },
+        "content": "Welcome to Html Bakery"
+    },
+    {
+        "tag": "p",
+        "attrs": {
+            "class": "description"
+        },
+        "content": "This is a sample template demonstrating the framework capabilities."
+    }
+]

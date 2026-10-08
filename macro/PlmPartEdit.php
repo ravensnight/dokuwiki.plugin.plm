@@ -8,15 +8,18 @@
  */
 class PlmPartEdit extends PlmMacro
 {
-    private string $ctx;
+    private string $ctx = '';
 
-    public function __construct(string $context)
+    public function init(mixed $config): void
     {
-        parent::__construct();
-        $this->ctx = trim($context);
+        if (!isset($config['id'])) {
+            throw new Exception('plm:partedit - missing attribute id.');
+        }
+
+        $this->ctx = trim($config['id']);
     }
 
-    public function render(HtmlBuilder $html, MacroHeader $header, ?string $body = null): void
+    public function render(HtmlBuilder $html, ?string $body = null): void
     {
         $db = PlmDB::get();
 

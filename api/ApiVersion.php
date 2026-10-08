@@ -10,6 +10,22 @@ class ApiVersion extends ApiBase {
         parent::__construct($db);
     }
 
+    private function getPk(array $nodePath): ?int
+    {
+        global $INPUT;
+        // For normal update processing (save action)
+        // Using primary key from URL to get current part data
+        if ($INPUT->post->has('pk')) {
+            return $INPUT->post->int('pk', 0);
+        } else {
+            if (!empty($nodePath)) {
+                return $nodePath[0];
+            } else {
+                ApiBase::error(400, 'Primary key not sent for part update.');
+            }
+        }
+    }
+
     protected function doGet(HtmlBuilder $out, array $nodePath): Event
     {
         $this->requireRole('reader');
@@ -23,23 +39,18 @@ class ApiVersion extends ApiBase {
 
     protected function doGetSingle(HtmlBuilder $out, array $nodePath): Event
     {
-        ApiBase::error(400, 'Not supported yet.');
-
-        /**
         $this->requireRole('reader');
 
         $id = $nodePath[0];
-        $part = Part::byPK($this->db(), (int)$id);
+        $version = PartVersion::byPK($this->db(), (int)$id);
 
-        if (!$part) {
-            PartFormFactory::renderCreateForm($out, $this->db());
-        } else {
-            PartFormFactory::renderEditForm($out, $this->db(), $part);
+        if ($version == null) {
+            ApiBase::error(400, "Version not found.");
+            return Event::reset('version');
         }
 
-        return 'partselect';
-         */
-        return Event::none('version');
+        VersionFormFactory::renderEditForm($out, $this->db(), $version);
+        return Event::select('version', $version->pk);
     }
 
     protected function doGetList(HtmlBuilder $out, array $nodePath): Event
@@ -63,44 +74,25 @@ class ApiVersion extends ApiBase {
         $submitAction = $INPUT->post->str('action', '');
 
         switch ($submitAction) {
-            /**
             case 'create':
-                $this->doCreate($out, $nodePath);
-                return 'partupdate';
+                return $this->doCreate($out, $nodePath);
 
             case 'save':
-                $this->doUpdate($out, $nodePath);
-                return 'partupdate';
+                return $this->doUpdate($out, $nodePath);
 
             case 'reset':
                 PartFormFactory::renderCreateForm($out, $this->db());
-                return null;
+                return Event::reset('version');
 
             case 'delete':
-                $this->doDelete($out, $nodePath);
-                return 'partupdate';
-            */
+                return $this->doDelete($out, $nodePath);
+
             default:
                 ApiBase::error(400, 'Unknown submit action ' . $submitAction);
                 return Event::none('version');
         }
     }
 
-    private function getPk(array $nodePath): ?int
-    {
-        global $INPUT;
-        // For normal update processing (save action)
-        // Using primary key from URL to get current part data
-        if ($INPUT->post->has('pk')) {
-            return $INPUT->post->int('pk', 0);
-        } else {
-            if (!empty($nodePath)) {
-                return $nodePath[0];
-            } else {
-                ApiBase::error(400, 'Primary key not sent for part update.');
-            }
-        }
-    }
 
     protected function doCreate(HtmlBuilder $out, array $nodePath): Event {
         $this->requireRole('author');
@@ -109,23 +101,25 @@ class ApiVersion extends ApiBase {
         global $INPUT;
 
         // Get form data for creating new part
-        /**
-        $ipn = $INPUT->post->str('ipn', '');
-        $description = $INPUT->post->str('description', '');
-        $categoryId = $INPUT->post->int('category', 0);
+        $name = $INPUT->post->str('name', '');
+        $major = $INPUT->post->int('major', 1);
+        $revision = $INPUT->post->int('revision', 1);
+        $statusId = $INPUT->post->int('status', 1);
+        $partId = $INPUT->post->int('partId', 0);
 
         // Fetch the category object
-        $category = Category::byPK($this->db(), $categoryId);
+        $s = Status::byPK($this->db(), $statusId);
+        $p = Part::byPK($this->db(), $partId);
 
         // Create new part object using factory method
-        $part = Part::createNew($category, $ipn, $description);
+        $version = PartVersion::createNew($p, $s, $name, $major, $revision);
         
         // Save the new part to the database (this will generate new ID)
-        $part->save($this->db());
+        $version->save($this->db());
 
         // Show the edit form for the newly created part
-        PartFormFactory::renderEditForm($out, $this->db(), $part);
-        */
+        VersionFormFactory::renderEditForm($out, $this->db(), $version, $partId);
+
         $this->error(400, "Not supported yet.");
         return Event::none('version');
     }
