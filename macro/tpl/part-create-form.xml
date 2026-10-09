@@ -1,0 +1,19 @@
+<div class='plm_partedit' id='partedit'>
+    <form hx-post='/doku.php?plmapi=va/parts' hx-target='#partedit' hx-swap='innerHTML'>
+        <div class='form-group'>
+            <label class='form-label' for='id' >ID</label>
+            <input type='text' id='id' name='id' value='' readonly='' />
+        </div>
+        <div class='form-group'>
+            <label class='form-label' for='ipn' >IPN</label>
+            <input type='text' id='ipn' name='ipn' value=''/>
+        </div>
+        <div class='form-group'>
+            <label class='form-label' for='description' >Description</label>
+            <input type='text' id='description' name='description' value=''/>
+        </div>
+        <div class='formactions' >
+            <button type='submit' name='action' value='create'>Create new</button>
+        </div>
+    </form>
+</div>

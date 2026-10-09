@@ -12,6 +12,11 @@ require_once __DIR__ . '/persist/ProductVariant.php';
 require_once __DIR__ . '/persist/VariantItemRef.php';
 require_once __DIR__ . '/persist/PlmDB.php';
 
+require_once __DIR__ . '/service/ui/HtmlBakery.php';
+require_once __DIR__ . '/service/ui/Renderer.php';
+require_once __DIR__ . '/service/ui/DefaultRenderer.php';
+require_once __DIR__ . '/service/ui/RendererRegistry.php';
+
 require_once __DIR__ . '/service/HtmlBaseFactory.php';
 require_once __DIR__ . '/service/PartListFactory.php';
 require_once __DIR__ . '/service/PartFormFactory.php';
@@ -24,6 +29,7 @@ require_once __DIR__ . '/util/ResponseWriter.php';
 
 require_once __DIR__ . '/macro/RenderContext.php';
 require_once __DIR__ . '/macro/PlmMacro.php';
+require_once __DIR__ . '/macro/PlmTest.php';
 require_once __DIR__ . '/macro/PlmBom.php';
 require_once __DIR__ . '/macro/PlmParts.php';
 require_once __DIR__ . '/macro/PlmPartEdit.php';
@@ -125,7 +131,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
         $writer = new RenderWriter($renderer);
         $writer->enableCache(false);
 
-        $html = new HtmlBuilder();
         try {                        
 
             $macro = null;
@@ -133,7 +138,6 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             switch ($context->type) {
 
                 case 'bom':
-
                     // plm:bom > MC1210F-BLACK                    
                     $macro = new PlmBom(PlmDB::get());
                     break;
@@ -150,35 +154,38 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                     $macro = new PlmVersions();
                     break;
 
+                case 'test':
+                    $macro = new PlmTest();
+                    break;
+
                 default:
-                    $this->error($html, 'Unknown PLM component: ' . $context->type);
+                    $this->error($writer, 'Unknown PLM component: ' . $context->type);
                     break;
             }
 
             if ($macro === null) {
-                $this->error($html, "PLM Internal Error: Macro instance not created.");
+                $this->error($writer, "PLM Internal Error: Macro instance not created.");
             } else {
                 try {
                     $macro->init($context->config ?? []);
-                    $macro->render($html);
-                    } catch (Exception $e) {
-                    $this->error($html, "PLM Macro Initialization failed. " . $e->getMessage());
+                    $macro->render($writer);
+                } catch (Exception $e) {
+                    $this->error($writer, "PLM Macro Initialization failed. " . $e->getMessage());
                 }
             }
 
-            $html->flush($writer);
             return true;
 
         } catch (Throwable $e) {
 
-            $this->error($html, 'PLM: ' . json_encode($e->getTrace()) );
-            $html->flush($writer);
-
+            $this->error($writer, 'PLM Error: ' . $e->getMessage() . ": " . json_encode($e->getTrace(), JSON_PRETTY_PRINT) );
             return true;
         }
     }
 
-    private function error(HtmlBuilder $html, string $message ): void {
+    private function error(Writer $out, string $message ): void {
+        $html = new HtmlBuilder();
         $html->tag('div', $message, 'error');
+        $html->flush($out);
     }
 }

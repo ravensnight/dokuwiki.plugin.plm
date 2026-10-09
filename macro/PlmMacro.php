@@ -8,8 +8,10 @@ abstract class PlmMacro {
     /**
      * Write some error message.
      */
-    protected function error(HtmlBuilder $out, string $msg) : void {
-        $out->tag('div', $msg, 'error');
+    protected function error(Writer $out, string $msg) : void {
+        $html = new HtmlBuilder();
+        $html->tag('div', $msg, 'error');
+        $html->flush($out);
     }
 
     /**
@@ -21,5 +23,14 @@ abstract class PlmMacro {
     /**
      * Override function for rendering the content.
      */
-    public abstract function render(HtmlBuilder $html): void;
+    public function render(Writer $out): void {
+        /** @var HtmlBuilder $html */
+        $html = new HtmlBuilder();
+        $this->build($html);
+        $html->flush($out);
+    }
+
+    protected function build(HtmlBuilder $html) : void {
+        $html->tag("div", "Not implemented!", "error");
+    }
 }

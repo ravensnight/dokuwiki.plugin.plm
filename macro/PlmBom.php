@@ -38,7 +38,7 @@ class PlmBom extends PlmMacro {
     /**
      * Render the complete BOM.
      */
-    public function render(HtmlBuilder $html): void
+    public function build(HtmlBuilder $html): void
     {
 
         $html

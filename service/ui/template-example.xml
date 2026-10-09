@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<div id='{id}' >
+    <table>
+        <thead>
+            <tr>
+                <th>ID</td>
+                <th>Name</td>
+                <th>Description</td>
+            </tr>
+        </thead>
+        <tbody>
+            <tr plm:data='ExampleProvider' plm:data-ctx='[ "partId" : "{partId}" ]' >
+                <td plm:render='SimpleFieldRenderer' plm:render-ctx='[ "field" : "@id" ]' />
+                <td plm:render='SimpleFieldRenderer' plm:render-ctx='[ "field" : "@name" ]' />
+                <td plm:render='SimpleFieldRenderer' plm:render-ctx='[ "field" : "@description" ]' />
+            </tr>
+        </tbody>
+    </table>
+</div>

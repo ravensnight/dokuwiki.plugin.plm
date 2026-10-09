@@ -19,10 +19,9 @@ class PlmPartEdit extends PlmMacro
         $this->ctx = trim($config['id']);
     }
 
-    public function render(HtmlBuilder $html, ?string $body = null): void
+    protected function build(HtmlBuilder $html): void
     {
         $db = PlmDB::get();
-
         $html->opn('div', 'plm_partedit', [ 'id' => $this->ctx, ]);
         PartFormFactory::renderCreateForm($html, $db);
         $html->cls();

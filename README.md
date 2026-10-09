@@ -1,509 +1,85 @@
 # PLM DokuWiki Plugin
 
-State-based frontend components for DokuWiki Struct.
+## Architecture
+This plugin consists of the following application layers:
 
-The PLM plugin provides reusable UI macros for displaying,
-selecting, editing and linking Struct records while preserving
-application state through a compact URL parameter.
+### Integeration 
+Responsible for the integration into dokuwiki itself.
 
----
+- **Request/Response Handling:** done by `./lib/plugins/plm/action.php`
+- **Page Processing/Rendering:** done by `./lib/plugins/plm/syntax.php`
+- **Custom Javascript:** loaded from `./lib/plugins/plm/js`
 
-# OVERVIEW
+### Persistance
+Defines the storage base for PLM objects.
+- **Framework:** uses dokuwiki SQLite plugin (`./lib/plugins/sqlite`) as base. 
+- **Schema Files:** `./lib/plugins/plm/db`
+- **PHP Sources:** `./lib/plugins/plm/persist`
 
-PLM consists of three main macros:
+### Utilities
+Provides plugin helper classes.
+- **PHP Sources:** `./lib/plugins/plm/utils`
 
-- `plm:table`
-  Display and manage lists of Struct records.
+### Services
+Defines controller services that handle UI/API requests, fetch/write data to persistance and reply data to UI/API.
 
-- `plm:select`
-  Select exactly one Struct record and expose it as state.
+- **PHP Sources:** `./lib/plugins/plm/service`
 
-- `plm:form`
-  Display and edit a single Struct record.
+### UI
+Implements macros, being inserted to dokuwiki pages.
+- **PHP Sources:** `./lib/plugins/plm/macro`
 
-All components communicate through the PLM state system.
+### API
+Provides the PLM plugin REST API. This one is involved by *Request/Response Handling*
+- **PHP Sources:** `./lib/plugins/plm/api`
 
-Example:
+## Common Rules
 
-```text
-parts.current._pk = 42
-parts.current.ipn = PRD-1234
-```
+There is no use of PHP namespaces right now.
 
-State is automatically transported through:
+## Components
 
-```text
-?plm=eyJwYXJ0cyI6eyJjdXJyZW50Ijp7...
-```
+### HTML Template Framework
+Builds a framework which shall be used in each UI Macro implementation in order to define a common behavior for data acquisition, rendering and communication.
 
----
+- **PHP Sources:** `./lib/plugins/plm/service/ui`
 
-# PLM STATE MODEL
+#### Design Rules
 
-State is stored as:
+##### HtmlBackery
+The main component is a template parser ***HtmlBakery*** with a function `parse(...)`. This function shall have the following parameters:
+- **writer:** an instance of `util/Writer.php` which is to be used for writing the html output.
+- **receipt:** an xml template file name, to be parsed and rendered.
+- **context:** some php array, which can be passed, to send some information for rendering.
 
-```text
-context.scope.field
-```
+Responsibilites:
+- Validate and parse the xml receipt into an xml object
+- Replace context references in all tag attributes. Context references are tag attribute values which use the pattern `{<name>}`. `<name>` has to be replaced by a corresponding value to be found in given **context** array or an empty string `''`, if the value does not exist.
+- Call the renderers for top level tags taken from template/receipt.
 
-Example:
+Out of scope:
+- HtmlBakery does NOT do implement any rendering logic on its own. Instead it always uses the help of at least the default renderer.
 
-```text
-parts.current._pk
-parts.current.ipn
+##### Renderer
+Rendering, shall be done by implementations of the abstract class ***Renderer***. Renderers provide a render function, with:
+- **writer:** the instance to write the output to
+- **receipt:** a xml-tag object, which is already parsed
+- **context:** some context which is passed to do some special rendering
 
-parts.filter.ipn
-```
+Responsibilites:
+- Read and extract all tag attributes, that begin with `plm:`. These tags control special behavior and must not be sent to output.
+- Write the html start tag with all non-plm tag attributes for the current tag to output.
+- Loop all contained sub tags and call the rendering for those.
+- Write the closing html tag.
+- A single default renderer class `DefaultRenderer` shall implement the standard behavior for all tags. If no different renderer is given in tag attribute `plm:renderer` this one shall be used.
+- If an explicite renderer name is given in tag attribute `plm:renderer` the class shall be instanciated via reflection.
+- Tag render functions in default renderer shall be visible and overwritable in derived clases
 
-Scopes:
+##### Provider
+To be continued.
 
-| Scope | Meaning |
-|---------|----------|
-| current | currently selected record |
-| filter | active filter values |
 
-Examples:
+#### Template Rules
+**Example:** given under plugin path `service/ui/template-example.xml`
 
-```text
-%parts.current._pk
-%parts.current.ipn
 
-%parttable.filter.ipn
-```
-
----
-
-# FILTER EXPRESSIONS
-
-Filters use Struct syntax:
-
-```text
-field=value
-field=*text*
-field~text
-```
-
-PLM references are allowed:
-
-```text
-_pk=%parts.current._pk
-
-part._pk=%parts.current._pk
-```
-
-Request parameters:
-
-```text
-&_pk
-&ipn
-```
-
----
-
-# plm:table
-
-Display a list of Struct records.
-
-## Syntax
-
-```text
-/plm:table > <context> | <schema>
-...
-/plm
-```
-
-Example:
-
-```text
-/plm:table > parts | plm_part
-
-cols: _pk, ipn, description
-
-filter: ipn
-
-create: ipn, description
-
-delete: "Delete"
-
-details: "Details" :intern:plm:partedit
-
-/plm
-```
-
----
-
-## Parameters
-
-### cols:
-
-Displayed columns.
-
-Example:
-
-```text
-cols: _pk, ipn, description
-```
-
-Template columns:
-
-```text
-cols: ipn, @link
-```
-
----
-
-### template:
-
-Define text templates.
-
-Example:
-
-```text
-template: link "Open" [[ :intern:part?id=$_pk ]]
-```
-
-Usage:
-
-```text
-cols: ipn, @link
-```
-
----
-
-### filter:
-
-Enable filter fields.
-
-Example:
-
-```text
-filter: ipn, description
-```
-
-State:
-
-```text
-parts.filter.ipn
-```
-
----
-
-### create:
-
-Enable inline create row.
-
-Example:
-
-```text
-create: ipn, description
-```
-
----
-
-### delete:
-
-Show delete button.
-
-Example:
-
-```text
-delete: "Delete"
-```
-
-Selected row:
-
-```text
-parts.current._pk
-```
-
----
-
-### details:
-
-Show navigation button.
-
-Example:
-
-```text
-details: "Open" :intern:plm:partedit
-```
-
-Generated URL:
-
-```text
-/intern/plm/partedit?plm=...
-```
-
----
-
-# plm:select
-
-Select exactly one Struct record.
-
-## Syntax
-
-```text
-/plm:select > <context> | schema[filter]
-content
-/plm
-```
-
-Example:
-
-```text
-/plm:select > selectedpart | plm_part[_pk=%parts.current._pk]
-
-## Editing:
-$ipn
-
-Description:
-$description
-
-/plm
-```
-
----
-
-## State generated
-
-```text
-selectedpart.current._pk
-selectedpart.current.ipn
-selectedpart.current.description
-```
-
----
-
-## Variables
-
-Struct fields:
-
-```text
-$ipn
-$description
-$_pk
-```
-
----
-
-## Empty message
-
-```text
-/plm:select > part | plm_part[_pk=999] "No item selected."
-...
-/plm
-```
-
----
-
-# plm:form
-
-Display or edit a single Struct record.
-
-## Syntax
-
-```text
-/plm:form > <context> | schema[filter]
-...
-/plm
-```
-
-Example:
-
-```text
-/plm:form > partform | plm_part[_pk=%parts.current._pk]
-
-field: ipn readonly
-field: description
-
-action: update "Update" :intern:plm:partedit
-action: delete "Delete" :intern:plm:partmgr
-
-/plm
-```
-
----
-
-## field:
-
-Limit visible fields.
-
-Example:
-
-```text
-field: ipn
-field: description
-```
-
-Readonly:
-
-```text
-field: ipn readonly
-```
-
----
-
-## action:
-
-Supported actions:
-
-```text
-create
-update
-delete
-redirect
-```
-
-Example:
-
-```text
-action: update "Save"
-```
-
-Redirect:
-
-```text
-action: update "Save" :intern:plm:partedit
-```
-
-PLM state is automatically preserved.
-
----
-
-## Create mode
-
-Without filter:
-
-```text
-/plm:form > newpart | plm_part
-
-field: ipn
-field: description
-
-action: create "Create"
-
-/plm
-```
-
----
-
-# PLM REFERENCES
-
----
-
-## Request values
-
-```text
-&_pk
-&ipn
-```
-
-Example:
-
-```text
-plm_part[_pk=&_pk]
-```
-
----
-
-## State references
-
-```text
-%parts.current._pk
-%parts.current.ipn
-```
-
-Example:
-
-```text
-part._pk=%parts.current._pk
-```
-
----
-
-## Template variables
-
-Inside templates:
-
-```text
-$_pk
-$ipn
-$description
-```
-
-Example:
-
-```text
-template: link "Open" [[ :page?id=$_pk ]]
-```
-
----
-
-# EXAMPLE APPLICATION
-
-Part manager:
-
-```text
-/plm:table > parts | plm_part
-
-cols: ipn, description
-
-filter: ipn
-
-create: ipn, description
-
-delete: "Delete"
-
-details: "Edit" :intern:plm:partedit
-
-/plm
-```
-
-Editor page:
-
-```text
-/plm:form > partform | plm_part[_pk=%parts.current._pk]
-
-field: ipn readonly
-field: description
-
-action: update "Update" :intern:plm:partedit
-action: delete "Delete" :intern:plm:partmgr
-
-/plm
-```
-
----
-
-# INTERNAL URL FORMAT
-
-Example:
-
-```text
-http://wiki/doku.php/intern:plm:partedit?plm=...
-```
-
-The `plm` parameter contains:
-
-```text
-context
-scope
-current record
-filter values
-navigation state
-```
-
-No session storage is required.
-
----
-
-# DESIGN GOALS
-
-- Stateless
-- URL-based navigation
-- Struct integration
-- Nested views
-- Bookmarkable pages
-- No server session
-- Reusable macros
-- Declarative syntax

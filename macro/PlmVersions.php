@@ -20,7 +20,7 @@ class PlmVersions extends PlmMacro
         $this->ctx = trim($config['id']);
     }
 
-    public function render(HtmlBuilder $html): void
+    public function build(HtmlBuilder $html): void
     {
         global $INPUT;
 

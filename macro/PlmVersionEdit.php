@@ -15,7 +15,7 @@ class PlmVersionEdit extends PlmMacro
         $this->ctx = trim($config['id']);
     }
 
-    public function render(HtmlBuilder $html, ): void
+    protected function build(HtmlBuilder $html): void
     {
         $db = PlmDB::get();
 

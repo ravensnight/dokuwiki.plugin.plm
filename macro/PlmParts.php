@@ -19,7 +19,7 @@ class PlmParts extends PlmMacro
         $this->ctx = trim($config['id']);
     }    
 
-    public function render(HtmlBuilder $html): void
+    protected function build(HtmlBuilder $html): void
     {
         $html->opn('div', 'plm_parts', [
             'id' => $this->ctx,
