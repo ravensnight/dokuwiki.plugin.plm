@@ -12,7 +12,7 @@ abstract class PlmBakeryMacro extends PlmMacro {
      * Initialize the from given config.
      * @throws Exception
      */
-    public function init(mixed $config) : void {
+    public final function init(mixed $config) : void {
         $this->config = is_array($config) ? $config : [];
     }
 

@@ -8,10 +8,6 @@
  */
 class PlmPartEdit extends PlmBakeryMacro
 {
-    public function init(mixed $config): void
-    {
-    }
-
     #[Override]
     protected function getTemplateName() : string {
         return 'part-form.xml';

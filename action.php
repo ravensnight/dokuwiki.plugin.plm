@@ -4,45 +4,8 @@ if (!defined('DOKU_INC')) {
     die();
 }
 
-require_once __DIR__ . '/persist/DbObject.php';
-require_once __DIR__ . '/persist/DbEnum.php';
-require_once __DIR__ . '/persist/Category.php';
-require_once __DIR__ . '/persist/Status.php';
-require_once __DIR__ . '/persist/PartVersion.php';
-require_once __DIR__ . '/persist/PartItemRef.php';
-require_once __DIR__ . '/persist/Part.php';
-require_once __DIR__ . '/persist/Product.php';
-require_once __DIR__ . '/persist/ProductVariant.php';
-require_once __DIR__ . '/persist/VariantItemRef.php';
-require_once __DIR__ . '/persist/PlmDB.php';
-
-require_once __DIR__ . '/util/HtmlContext.php';
-require_once __DIR__ . '/util/HtmlBuilder.php';
-require_once __DIR__ . '/util/Writer.php';
-require_once __DIR__ . '/util/RenderWriter.php';
-require_once __DIR__ . '/util/ResponseWriter.php';
-require_once __DIR__ . '/util/SubstitutionUtility.php';
-
-require_once __DIR__ . '/api/Event.php';
-require_once __DIR__ . '/api/ApiBase.php';
-require_once __DIR__ . '/api/ApiPart.php';
-require_once __DIR__ . '/api/ApiVersion.php';
-
-require_once __DIR__ . '/service/HtmlBaseFactory.php';
-require_once __DIR__ . '/service/PartFormFactory.php';
-require_once __DIR__ . '/service/PartListFactory.php';
-require_once __DIR__ . '/service/HtmlBaseFactory.php';
-
-require_once __DIR__ . '/service/ui/HtmlBakery.php';
-require_once __DIR__ . '/service/ui/Renderer.php';
-require_once __DIR__ . '/service/ui/DefaultRenderer.php';
-require_once __DIR__ . '/service/ui/RendererRegistry.php';
-require_once __DIR__ . '/service/ui/ProviderRegistry.php';
-require_once __DIR__ . '/service/ui/Provider.php';
-require_once __DIR__ . '/service/ui/SimpleProvider.php';
-require_once __DIR__ . '/service/ui/CategoriesProvider.php';
-
-define('PLM_PLUGIN_TEMPLATE_DIR', __DIR__ . '/service/ui/tpl');
+// Load all plugin components
+require_once(__DIR__ . '/init.php');
 
 use \dokuwiki\Extension\EventHandler;
 
@@ -103,3 +66,4 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         );
     }
 }
+

@@ -1,0 +1,28 @@
+<div class="plm_parts" id="partlist"
+        hx-get="/doku.php?plmapi=v1/parts" 
+        hx-trigger="part[event.detail.trigger=change] from:body"
+        hx-target="#partlist"
+        hx-swap="innerHTML" >
+    <table>
+        <thead>
+            <tr>
+                <th class="id">ID</th>
+                <th class="ipn">IPN</th>
+                <th class="description">Description</th>
+                <th class="category">Category</th>
+            </tr>
+        </thead>
+        <tbody plm:provider="PartListProvider" >
+            <tr>
+                <td class="id">{id}</td>
+                <td class="ipn">
+                    <a href="/doku.php?plmapi=v1/parts/{id}" hx-get="/doku.php?plmapi=v1/parts/{id}" hx-target="#partedit" hx-swap="innerHTML" >
+                        {ipn}
+                    </a>
+                </td>
+                <td class="description">{description}</td>
+                <td class="category">{category}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
