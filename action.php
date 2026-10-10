@@ -21,7 +21,7 @@ require_once __DIR__ . '/util/HtmlBuilder.php';
 require_once __DIR__ . '/util/Writer.php';
 require_once __DIR__ . '/util/RenderWriter.php';
 require_once __DIR__ . '/util/ResponseWriter.php';
-
+require_once __DIR__ . '/util/SubstitutionUtility.php';
 
 require_once __DIR__ . '/api/Event.php';
 require_once __DIR__ . '/api/ApiBase.php';
@@ -31,6 +31,20 @@ require_once __DIR__ . '/api/ApiVersion.php';
 require_once __DIR__ . '/service/HtmlBaseFactory.php';
 require_once __DIR__ . '/service/PartFormFactory.php';
 require_once __DIR__ . '/service/PartListFactory.php';
+require_once __DIR__ . '/service/HtmlBaseFactory.php';
+
+require_once __DIR__ . '/service/ui/HtmlBakery.php';
+require_once __DIR__ . '/service/ui/Renderer.php';
+require_once __DIR__ . '/service/ui/DefaultRenderer.php';
+require_once __DIR__ . '/service/ui/RendererRegistry.php';
+require_once __DIR__ . '/service/ui/ProviderRegistry.php';
+require_once __DIR__ . '/service/ui/Provider.php';
+require_once __DIR__ . '/service/ui/SimpleProvider.php';
+require_once __DIR__ . '/service/ui/CategoriesProvider.php';
+
+define('PLM_PLUGIN_TEMPLATE_DIR', __DIR__ . '/service/ui/tpl');
+
+use \dokuwiki\Extension\EventHandler;
 
 class action_plugin_plm extends DokuWiki_Action_Plugin
 {
@@ -39,7 +53,7 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
      */
     private ?PlmDB $plmdb = null;
 
-    public function register(Doku_Event_Handler $controller)
+    public function register(EventHandler $controller)
     {
         $controller->register_hook(
             'DOKUWIKI_STARTED', 'BEFORE', $this, 'handleAjax'

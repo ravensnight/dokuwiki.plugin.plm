@@ -10,7 +10,26 @@ class ApiPart extends ApiBase {
         parent::__construct($db);
     }
 
-    protected function doGet(HtmlBuilder $out, array $nodePath): Event
+    protected function renderPartForm(Writer $out, ?Part $part) : void {
+        $context = [];
+
+        if ($part) {
+            $context['mode:edit'] = true;
+            $context['part:id'] = $part->pk;
+            $context['part:ipn'] = $part->ipn;
+            $context['part:description'] = $part->description;
+            $context['part:category'] = $part->categoryId;
+        } else {
+            $context['mode:create'] = true;
+        }
+
+        /** @var HtmlBakery $b */
+        $b = new HtmlBakery();            
+
+        $b->parse( $out, PLM_PLUGIN_TEMPLATE_DIR . '/part-form.xml', $context );
+    }
+
+    protected function doGet(Writer $out, array $nodePath): Event
     {
         $this->requireRole('reader');
 
@@ -24,30 +43,36 @@ class ApiPart extends ApiBase {
         return $evt;
     }
 
-    protected function doGetSingle(HtmlBuilder $out, array $nodePath): Event
+    protected function doGetSingle(Writer $out, array $nodePath): Event
     {
         $this->requireRole('reader');
 
         $id = $nodePath[0];
-        $part = Part::byPK($this->db(), (int)$id);
+        $part = null;
+        
+        if ($id) {
+            $part = Part::byPK($this->db(), (int)$id);
+        }
 
-        if (!$part) {
-            PartFormFactory::renderCreateForm($out, $this->db());
-            return Event::reset('part');
-        } else {
-            PartFormFactory::renderEditForm($out, $this->db(), $part);
+        $this->renderPartForm($out, $part);
+        if ($part !== null) {
             return Event::select('part', $part->pk);
+        } else {
+            return Event::reset('part');
         }
     }
 
-    protected function doGetList(HtmlBuilder $out, array $nodePath): Event
+    protected function doGetList(Writer $out, array $nodePath): Event
     {
+        $html = new HtmlBuilder();
         $this->requireRole('reader');
-        PartListFactory::renderPartList($out, $this->db());
+        PartListFactory::renderPartList($html, $this->db());
+        $html->flush($out);
+
         return Event::reset('part');
     }
 
-    protected function doPost(HtmlBuilder $out, array $nodePath): Event
+    protected function doPost(Writer $out, array $nodePath): Event
     {
         // Access form data through DokuWiki's global input system
         global $INPUT;
@@ -64,7 +89,7 @@ class ApiPart extends ApiBase {
                 return $this->doDelete($out, $nodePath);
 
             case 'reset':
-                PartFormFactory::renderCreateForm($out, $this->db());
+                $this->renderPartForm($out, null);
                 return Event::reset('part');
 
             default:
@@ -89,7 +114,7 @@ class ApiPart extends ApiBase {
         }
     }
 
-    protected function doCreate(HtmlBuilder $out, array $nodePath): Event {
+    protected function doCreate(Writer $out, array $nodePath): Event {
         $this->requireRole('author');
 
         // Access form data through DokuWiki's global input system
@@ -109,12 +134,11 @@ class ApiPart extends ApiBase {
         // Save the new part to the database (this will generate new ID)
         $part->save($this->db());
 
-        // Show the edit form for the newly created part
-        PartFormFactory::renderEditForm($out, $this->db(), $part);
+        $this->renderPartForm($out, $part);
         return Event::change('part', $part->pk);
     }
 
-    protected function doUpdate(HtmlBuilder $out, array $nodePath): Event {
+    protected function doUpdate(Writer $out, array $nodePath): Event {
         global $INPUT;
 
         $this->requireRole('author');
@@ -137,16 +161,16 @@ class ApiPart extends ApiBase {
             $part->save($this->db());
 
             // Show the updated form
-            PartFormFactory::renderEditForm($out, $this->db(), $part);
+            $this->renderPartForm($out, $part);
             return Event::change('part', $part->pk);
         } else {
             // If part doesn't exist, create a new one
-            PartFormFactory::renderCreateForm($out, $this->db());
+            $this->renderPartForm($out, null);
             return Event::reset('part');
         }
     }
 
-    protected function doDelete(HtmlBuilder $out, array $nodePath): Event
+    protected function doDelete(Writer $out, array $nodePath): Event
     {
         $this->requireRole('admin');
 
@@ -156,7 +180,7 @@ class ApiPart extends ApiBase {
             $part->delete($this->db(), true);
         }
 
-        PartFormFactory::renderCreateForm($out, $this->db());
+        $this->renderPartForm($out, null);
         return Event::change('part', $part->pk);
     }        
 }

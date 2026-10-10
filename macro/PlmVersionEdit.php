@@ -2,7 +2,7 @@
 
 /**
  */
-class PlmVersionEdit extends PlmMacro
+class PlmVersionEdit extends PlmBuilderMacro
 {
     private string $ctx = '';
 

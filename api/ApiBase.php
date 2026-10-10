@@ -231,10 +231,7 @@ abstract class ApiBase
     protected final function handle(string $method, array $nodePath) {
 
         /** @var ResponseWriter w */
-        $w = new ResponseWriter();
-
-        /** @var HtmlBuilder out */
-        $out = new HtmlBuilder();
+        $out = new ResponseWriter();
         
         $evt = null;
         switch ($method) {
@@ -251,22 +248,19 @@ abstract class ApiBase
         }
 
         if ($evt !== null) {
-            $w->additionalHeaders['hx-trigger'] = '{"' . $evt->name . '":' . json_encode($evt->details ?? 'null') . '}';
+            $out->additionalHeaders['hx-trigger'] = '{"' . $evt->name . '":' . json_encode($evt->details ?? 'null') . '}';
         }
 
-        /**
-         * @var ResponseWriter w
-         */
-        $out->flush($w);
+        $out->flush();
     }
 
     /**
      * @return Event - a html event to trigger
      */
-    protected abstract function doGet(HtmlBuilder $out, array $nodePath) : Event;
+    protected abstract function doGet(Writer $out, array $nodePath) : Event;
 
     /**
      * @return Event - a html event to trigger
      */
-    protected abstract function doPost(HtmlBuilder $out, array $nodePath): Event;
+    protected abstract function doPost(Writer $out, array $nodePath): Event;
 }

@@ -8,86 +8,93 @@ abstract class Renderer {
      * Renders a given XML tag and its children.
      * 
      * @param Writer $writer The output writer.
-     * @param SimpleXMLElement $receipt The parsed XML tag.
-     * @param array $context Data context for rendering.
+     * @param SimpleXMLElement $receipt - The parsed XML tag.
+     * @param array $context - Data context for rendering.
      */
-    public function render(Writer $writer, SimpleXMLElement $receipt, array $context): void {
-        $tagName = $receipt->getName();
+    abstract public function render(Writer $writer, SimpleXMLElement $receipt, array $context): void;
 
-        // Extract raw attributes
-        $attributes = [];
-        foreach ($receipt->attributes() as $name => $value) {
-            // Skip plm: attributes
-            if (strpos($name, 'plm:') !== 0) {
-                $attributes[$name] = (string)$value;
+    /**
+     * Identifies the provider and fetches the data based on the tag attributes.
+     * @param array $parentContext The base context.
+     * @return array The provider data (each element is a merged context).
+     */
+    protected function buildChildContextArray(array $resolvedAttrs, array $parentContext): array {
+
+        $extendedContext = $parentContext;
+        // check additional context attributes
+        if (isset($resolvedAttrs['plm:context'])) {
+            $json = $resolvedAttrs['plm:context'];
+
+            if ($json) {
+                $addContext = json_decode($json, true);
+                if (is_array($addContext)) {
+                    $extendedContext = array_merge($extendedContext, $addContext);
+                }
             }
         }
 
-        // Extract children
-        $children = [];
-        foreach ($receipt->children() as $child) {
-            $children[] = $child;
+        $providerClass = $resolvedAttrs['plm:provider'] ?? 'SimpleProvider';
+
+        $provider = ProviderRegistry::getProvider($providerClass);
+        $rawProviderData = $provider->provide($extendedContext);
+
+        // Ensure we are working with a list of items
+        $items = is_array($rawProviderData) ? $rawProviderData : [$rawProviderData];
+
+        $mergedResults = [];
+        foreach ($items as $item) {
+            // If the provider item is an array, merge it with parent context.
+            // array_merge($parent, $child) ensures child overrides parent.
+            if (is_array($item)) {
+                $mergedResults[] = array_merge($extendedContext, $item);
+            } else {
+                // If the provider returns a non-array (e.g. a stdClass),
+                // we convert to array and merge.
+                $mergedResults[] = array_merge($extendedContext, (array)$item);
+            }
         }
 
-        // Extract text content
-        $textContent = (string)$receipt;
-
-        // Delegate to the new unified renderTag method
-        $this->renderTag($writer, $tagName, $attributes, $children, $context, $textContent);
+        return $mergedResults;
     }
 
     /**
-     * Handles the construction of the tag, attribute substitution, and child recursion.
+     * Substitue attributes from values in a given context.
      */
-    protected function renderTag(Writer $writer, string $tagName, array $attributes, array $children, array $context, string $textContent): void {
-        // 1. Perform attribute substitution
+    protected static function resolveAttributes(array $attributes, array $context): array
+    {
+        // 2. Perform attribute substitution
         $substitutedAttributes = [];
         foreach ($attributes as $name => $value) {
-            $substitutedAttributes[$name] = preg_replace_callback('/\{([a-zA-Z0-9_]+)\}/', function($matches) use ($context) {
-                $key = $matches[1];
-                return isset($context[$key]) ? $context[$key] : '';
-            }, $value);
+            $newval = SubstitutionUtility::resolveBraces($value, $context);
+            if (!empty($newval)) {
+                $substitutedAttributes[$name] = $newval;
+            }
         }
 
-        // 2. Construct opening tag
+        return $substitutedAttributes;
+    }
+
+    /**
+     * Substitue attributes from values in a given context.
+     */
+    protected static function buildAttributeString(array $attributes) : string {
+
+        // create the attribute string
         $attrString = '';
-        if (!empty($substitutedAttributes)) {
+        if (!empty($attributes)) {
             $attrParts = [];
-            foreach ($substitutedAttributes as $key => $val) {
+            foreach ($attributes as $key => $val) {
+                // Skip internal plm attributes from appearing in the final tag attributes
+                if (strpos($key, 'plm:') === 0) {
+                    continue;
+                }
+
                 $attrParts[] = sprintf(' %s="%s"', $key, $val);
             }
             $attrString = implode('', $attrParts);
         }
 
-        $writer->write("<$tagName" . $attrString . ">");
-
-        $this->renderContent($writer, $textContent, $children, $context);
-
-        // 4. Write closing tag
-        $writer->write("</$tagName>");
-    }
-
-    /**
-     * Hook for concrete classes to override the internal content rendering.
-     * By default, it does nothing (handled by the loop in renderTag).
-     */
-    protected function renderContent(Writer $writer, string $textContent, array $children, array $context): void {
-
-        // Write inner text content if it exists
-        if (trim($textContent) !== '') {
-            $writer->write($textContent);
-        }
-
-        // 3. Render children
-        foreach ($children as $child) {
-            $rendererClass = 'DefaultRenderer';
-            if (isset($child['plm:renderer'])) {
-                $rendererClass = $child['plm:renderer'];
-            }
-
-            $rendererInstance = RendererRegistry::getRenderer($rendererClass);
-            $rendererInstance->render($writer, $child, $context);
-        }
+        return $attrString;
     }
 }
 

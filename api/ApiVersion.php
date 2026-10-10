@@ -26,10 +26,9 @@ class ApiVersion extends ApiBase {
         }
     }
 
-    protected function doGet(HtmlBuilder $out, array $nodePath): Event
+    protected function doGet(Writer $out, array $nodePath): Event
     {
         $this->requireRole('reader');
-
         if (!empty($nodePath)) {
             return $this->doGetSingle($out, $nodePath);
         } else {
@@ -37,7 +36,7 @@ class ApiVersion extends ApiBase {
         }
     }
 
-    protected function doGetSingle(HtmlBuilder $out, array $nodePath): Event
+    protected function doGetSingle(Writer $out, array $nodePath): Event
     {
         $this->requireRole('reader');
 
@@ -49,26 +48,30 @@ class ApiVersion extends ApiBase {
             return Event::reset('version');
         }
 
-        VersionFormFactory::renderEditForm($out, $this->db(), $version);
+        $html = new HtmlBuilder();
+        VersionFormFactory::renderEditForm($html, $this->db(), $version);
+        $html->flush($out);
         return Event::select('version', $version->pk);
     }
 
-    protected function doGetList(HtmlBuilder $out, array $nodePath): Event
+    protected function doGetList(Writer $out, array $nodePath): Event
     {
         $this->requireRole('reader');
+
+        $html = new HtmlBuilder();
 
         global $INPUT;
         $partId = $INPUT->get->int('partId');
 
         if ($partId !== 0) {
-            PartListFactory::renderPartVersionList($out, PlmDB::get(), $partId);
+            PartListFactory::renderPartVersionList($html, PlmDB::get(), $partId);
         }
 
         return Event::reset('version');
     }
 
-    protected function doPost(HtmlBuilder $out, array $nodePath): Event
-    {        
+    protected function doPost(Writer $out, array $nodePath): Event
+    {
         // Access form data through DokuWiki's global input system
         global $INPUT;
         $submitAction = $INPUT->post->str('action', '');
@@ -81,7 +84,9 @@ class ApiVersion extends ApiBase {
                 return $this->doUpdate($out, $nodePath);
 
             case 'reset':
-                PartFormFactory::renderCreateForm($out, $this->db());
+                $html = new HtmlBuilder();
+                PartFormFactory::renderCreateForm($html, $this->db());
+                $html->flush($out);
                 return Event::reset('version');
 
             case 'delete':
@@ -94,7 +99,7 @@ class ApiVersion extends ApiBase {
     }
 
 
-    protected function doCreate(HtmlBuilder $out, array $nodePath): Event {
+    protected function doCreate(Writer $out, array $nodePath): Event {
         $this->requireRole('author');
 
         // Access form data through DokuWiki's global input system
@@ -118,13 +123,15 @@ class ApiVersion extends ApiBase {
         $version->save($this->db());
 
         // Show the edit form for the newly created part
-        VersionFormFactory::renderEditForm($out, $this->db(), $version, $partId);
+        $html = new HtmlBuilder();
+        VersionFormFactory::renderEditForm($html, $this->db(), $version);
+        $html->flush($out);
 
         $this->error(400, "Not supported yet.");
         return Event::none('version');
     }
 
-    protected function doUpdate(HtmlBuilder $out, array $nodePath): Event {
+    protected function doUpdate(Writer $out, array $nodePath): Event {
         global $INPUT;
 
         $this->requireRole('author');
@@ -158,7 +165,7 @@ class ApiVersion extends ApiBase {
         return Event::none('version');
     }
 
-    protected function doDelete(HtmlBuilder $out, array $nodePath): Event
+    protected function doDelete(Writer $out, array $nodePath): Event
     {
         $this->requireRole('admin');
 

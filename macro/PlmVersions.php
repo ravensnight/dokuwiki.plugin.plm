@@ -6,7 +6,7 @@
  * The variant name is intentionally retained for the future variant filter,
  * but it does not affect the list yet.
  */
-class PlmVersions extends PlmMacro
+class PlmVersions extends PlmBuilderMacro
 {
     private string $PREFIX = '/doku.php?plmapi=v1/';
     private string $ctx;
@@ -22,8 +22,6 @@ class PlmVersions extends PlmMacro
 
     public function build(HtmlBuilder $html): void
     {
-        global $INPUT;
-
         $html->opn('div', 'plm_versions', [
             'id' => $this->ctx,
             'hx-get' => $this->PREFIX . 'versions',

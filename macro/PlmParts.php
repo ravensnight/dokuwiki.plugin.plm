@@ -6,7 +6,7 @@
  * The variant name is intentionally retained for the future variant filter,
  * but it does not affect the list yet.
  */
-class PlmParts extends PlmMacro
+class PlmParts extends PlmBuilderMacro
 {
     private string $PREFIX = '/doku.php?plmapi=v1/';
     private string $ctx = '';

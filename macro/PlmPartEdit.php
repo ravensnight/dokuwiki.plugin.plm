@@ -6,24 +6,20 @@
  * The variant name is intentionally retained for the future variant filter,
  * but it does not affect the list yet.
  */
-class PlmPartEdit extends PlmMacro
+class PlmPartEdit extends PlmBakeryMacro
 {
-    private string $ctx = '';
-
     public function init(mixed $config): void
     {
-        if (!isset($config['id'])) {
-            throw new Exception('plm:partedit - missing attribute id.');
-        }
-
-        $this->ctx = trim($config['id']);
     }
 
-    protected function build(HtmlBuilder $html): void
+    #[Override]
+    protected function getTemplateName() : string {
+        return 'part-form.xml';
+    }
+
+    #[Override]
+    protected function getContext(array $config): array
     {
-        $db = PlmDB::get();
-        $html->opn('div', 'plm_partedit', [ 'id' => $this->ctx, ]);
-        PartFormFactory::renderCreateForm($html, $db);
-        $html->cls();
+        return [ "mode:create" => "true" ];
     }
 }

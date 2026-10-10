@@ -1,0 +1,30 @@
+<div class='plm_partedit' id='partedit'>
+    <form hx-post='/doku.php?plmapi=v1/parts' hx-target='#partedit' hx-swap='innerHTML'>
+        <div class='form-group'>
+            <label class='form-label' for='part-id' >ID</label>
+            <input type='text' id='part-id' name='pk' value='{part:id}' readonly='readonly' />
+        </div>
+        <div class='form-group'>
+            <label class='form-label' for='part-ipn' >IPN</label>
+            <input type='text' id='part-ipn' name='ipn' value='{part:ipn}'/>
+        </div>
+        <div class='form-group'>
+            <label class='form-label' for='part-description' >Description</label>
+            <input type='text' id='part-description' name='description' value='{part:description}'/>
+        </div>
+
+        <div class='form-group'>
+            <label class='form-label' for='part-category' >Category</label>
+            <select id='part-category' name='category' plm:provider="CategoriesProvider" plm:context='{ "selectedCategory" : "{part:category}" }'>
+                <option value='{id}' selected='{selected}' >{name} - {description}</option>
+            </select>
+        </div>
+
+        <div class='formactions' >
+            <button plm:if='mode:create' type='submit' name='action' value='create'>Create new</button>
+            <button plm:if='mode:edit' type='submit' name='action' value='reset'>Clear Form</button>
+            <button plm:if='mode:edit' type='submit' name='action' value='save'>Submit</button>
+            <button plm:if='mode:edit' type='submit' name='action' value='delete'>Delete</button>
+        </div>
+    </form>
+</div>

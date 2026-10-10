@@ -3,7 +3,7 @@
 /**
  * PLM BOM renderer.
  */
-class PlmBom extends PlmMacro {
+class PlmBom extends PlmBuilderMacro {
 
     private readonly PlmDB $db;
 

@@ -16,6 +16,10 @@ require_once __DIR__ . '/service/ui/HtmlBakery.php';
 require_once __DIR__ . '/service/ui/Renderer.php';
 require_once __DIR__ . '/service/ui/DefaultRenderer.php';
 require_once __DIR__ . '/service/ui/RendererRegistry.php';
+require_once __DIR__ . '/service/ui/ProviderRegistry.php';
+require_once __DIR__ . '/service/ui/Provider.php';
+require_once __DIR__ . '/service/ui/SimpleProvider.php';
+require_once __DIR__ . '/service/ui/CategoriesProvider.php';
 
 require_once __DIR__ . '/service/HtmlBaseFactory.php';
 require_once __DIR__ . '/service/PartListFactory.php';
@@ -26,14 +30,19 @@ require_once __DIR__ . '/util/HtmlBuilder.php';
 require_once __DIR__ . '/util/Writer.php';
 require_once __DIR__ . '/util/RenderWriter.php';
 require_once __DIR__ . '/util/ResponseWriter.php';
+require_once __DIR__ . '/util/SubstitutionUtility.php';
 
 require_once __DIR__ . '/macro/RenderContext.php';
 require_once __DIR__ . '/macro/PlmMacro.php';
+require_once __DIR__ . '/macro/PlmBuilderMacro.php';
+require_once __DIR__ . '/macro/PlmBakeryMacro.php';
 require_once __DIR__ . '/macro/PlmTest.php';
 require_once __DIR__ . '/macro/PlmBom.php';
 require_once __DIR__ . '/macro/PlmParts.php';
 require_once __DIR__ . '/macro/PlmPartEdit.php';
 require_once __DIR__ . '/macro/PlmVersions.php';
+
+define('PLM_PLUGIN_TEMPLATE_DIR', __DIR__ . '/service/ui/tpl');
 
 use dokuwiki\Parsing\Handler;
 

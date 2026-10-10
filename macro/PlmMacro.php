@@ -23,14 +23,6 @@ abstract class PlmMacro {
     /**
      * Override function for rendering the content.
      */
-    public function render(Writer $out): void {
-        /** @var HtmlBuilder $html */
-        $html = new HtmlBuilder();
-        $this->build($html);
-        $html->flush($out);
-    }
-
-    protected function build(HtmlBuilder $html) : void {
-        $html->tag("div", "Not implemented!", "error");
-    }
+    public abstract function render(Writer $out): void;
+    
 }

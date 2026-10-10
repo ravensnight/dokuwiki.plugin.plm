@@ -8,14 +8,21 @@ class ResponseWriter extends Writer {
     /** @var array[string => string] */
     public array $additionalHeaders = [];
 
+    private string $buffer = '';
+
     public function __construct() {
     }
 
     /**
      * Write a string to 
      */
-    public function write(string $buffer): void
+    public function write(string $text): void
     {
+        $this->buffer .= $text;
+    }
+
+    /** Flush the whole buffer */
+    public function flush() : void {
         http_response_code($this->statusCode);
         header('Content-Type: ' . $this->contentType);
 
@@ -25,6 +32,6 @@ class ResponseWriter extends Writer {
             }
         }
 
-        echo $buffer;
+        echo $this->buffer;
     }
 }
