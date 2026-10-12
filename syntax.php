@@ -110,25 +110,9 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
                     $macro = new PlmBomMacro(PlmDB::get());
                     break;
 
-                case 'parts':
-                    $macro = new PlmParts();
-                    break;
-
-                case 'partedit':
-                    $macro = new PlmPartEdit();
-                    break;
-
-                case 'versions':
-                    $macro = new PlmVersions();
-                    break;
-
                 case 'manager':
                     // Entry point for the Single Page Application
                     $macro = new PlmManager();
-                    break;
-
-                case 'test':
-                    $macro = new PlmTest();
                     break;
 
                 default:

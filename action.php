@@ -8,14 +8,10 @@ if (!defined('DOKU_INC')) {
 require_once(__DIR__ . '/init.php');
 
 use \dokuwiki\Extension\EventHandler;
+use \dokuwiki\Extension\ActionPlugin;
 
-class action_plugin_plm extends DokuWiki_Action_Plugin
+class action_plugin_plm extends ActionPlugin
 {
-    /**
-     * @var PlmDB
-     */
-    private ?PlmDB $plmdb = null;
-
     public function register(EventHandler $controller)
     {
         $controller->register_hook(
@@ -23,12 +19,15 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         );
     }
 
+    /**
+     * Ajax handler being called by DokuWiki due to registration.
+     */
     public function handleAjax( Doku_Event $event, $param ): void {
 
         global $INPUT;
-        $route = $INPUT->get->str('plmapi');
+        $route = $INPUT->get->str('plm');
 
-        if (!str_starts_with($route, 'v1/')) {
+        if (!str_starts_with($route, '/api/v1/')) {
             return;
         }
 
@@ -36,23 +35,22 @@ class action_plugin_plm extends DokuWiki_Action_Plugin
         $event->preventDefault();
         $event->stopPropagation();
 
-        try {
-            ApiBase::handleRequest(PlmDB::get(), $route);
+        try {            
+        
+            AbstractApi::handleRequest($route);
+
         } catch (Throwable $e) {
-            error_log( 'PLM API error: ' . $e->getMessage() );
-            $this->sendError( 500, 'Internal server error: ' . $e->getMessage());
+            error_log( 'PLM API error: ' . $e->getTraceAsString());
+
+            $out = new ResponseWriter();
+            AbstractApi::error($out, 500, "PLM API error: " . $e->getMessage());
         }
 
         exit;
     }
 
-    private function sendError(
-        int $status,
-        string $message
-    ): void {
-
+    private function sendError( int $status, string $message ): void {
         http_response_code($status);
-
         header(
             'Content-Type: application/json; charset=utf-8'
         );

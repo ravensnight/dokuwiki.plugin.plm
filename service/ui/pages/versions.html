@@ -1,0 +1,24 @@
+<div class="plm-module">
+    <h2>Version Management</h2>
+
+    <table>
+        <thead>
+            <th class="id">ID</th>
+            <th class="ipn">IPN</th>
+            <th class="name">Name</th>
+            <th class="major">Version</th>
+            <th class="revision">Revision</th>
+            <th class="status">Status</th>
+        </thead>
+        <template x-for="item in data" :key="item.id">
+            <tr>
+                <td class='id' x-text="item.id"></td>
+                <td class='ipn' x-text="item.ipn"></td>
+                <td class='name' x-text="item.name"></td>
+                <td class='major' x-text="item.major"></td>
+                <td class='revision' x-text="item.revision"></td>
+                <td class='status' x-text="item.status"></td>
+            </tr>
+        </template>
+    </table>
+</div>

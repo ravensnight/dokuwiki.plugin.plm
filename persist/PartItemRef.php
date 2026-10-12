@@ -118,6 +118,25 @@ class PartItemRef extends DbObject {
         return null;
     }
 
+    /** Get the child item for this reference link */
+    public function fetchChild(PlmDB $db) : PartVersion {
+        return PartVersion::byPK($db, $this->childVersionId);
+    }
+
+    /**
+     * Returns true, if this version shall be applied to given variant.
+     */
+    public function appliesToVariant(PlmDB $db, int $variantId) : bool {
+        $q = 'SELECT count(*) FROM plm_part_item_variant WHERE part_item_id = :pk AND variant_id = :variant_id;';
+
+        $result = $db->querySingle($q, [
+            'pk' => $this->pk,
+            'variant_id' => $variantId
+        ]);
+
+        return $result[0] > 0;
+    }
+
     /**
      * Update or create an object
      */

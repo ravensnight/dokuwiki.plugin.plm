@@ -1,0 +1,20 @@
+<div x-data="appContext" class="plm-app">
+    <header class="header">
+        <nav class="navigation" >
+            <button @click="loadView('parts')">Parts</button>
+            <button @click="loadView('versions')">Versions</button>
+            <button @click="loadView('bom')">BOM</button>
+            <button @click="loadView('products')">Products</button>
+            <button @click="loadView('companies')">Companies</button>
+            <button @click="loadView('masterdata')">Master Data</button>
+        </nav>
+    </header>
+    <main class="content">
+        <p x-show="loading">Loading...</p>
+        <p x-show="error" x-text="error"></p>
+
+        <div x-html="html"></div>
+        <pre x-show="!html" x-text="JSON.stringify(data, null, 2)"></pre>
+    </main>
+</div>
+

@@ -10,7 +10,7 @@ class PlmDB {
     private $_db;
 
     /** @var PlmDB $_db */
-    private static $_plm = null;
+    private static ?PlmDB $_plm = null;
 
     private function __construct() {
     }

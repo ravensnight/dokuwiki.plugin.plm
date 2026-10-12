@@ -1,0 +1,21 @@
+<div class="plm-module">
+    <h2>Product Management</h2>
+
+    <h3>Products</h3>
+    <table>
+        <thead>
+            <th class="id">ID</th>
+            <th class="name">Name</th>
+            <th class="description">Description</th>
+        </thead>
+        <template x-for="item in data" :key="item.id">
+            <tr>
+                <td x-text="item.id"></td>
+                <td x-text="item.name"></td>
+                <td x-text="item.description"></td>
+            </tr>
+        </template>
+    </table>
+
+    <h3>Product Variants</h3>
+</div>

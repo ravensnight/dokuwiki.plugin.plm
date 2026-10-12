@@ -16,7 +16,6 @@ require_once(__DIR__ . '/persist/PartVersion.php');
 require_once(__DIR__ . '/persist/Product.php');
 require_once(__DIR__ . '/persist/ProductVariant.php');
 require_once(__DIR__ . '/persist/VariantItemRef.php');
-// require_once(__DIR__ . '/persist/PlmBom.php');
 require_once(__DIR__ . '/persist/Company.php');
 require_once(__DIR__ . '/persist/CompanyType.php');
 
@@ -30,44 +29,26 @@ require_once(__DIR__ . '/util/HtmlBuilder.php');
 
 // 3. Factories (Base for constructing components)
 require_once(__DIR__ . '/service/HtmlBaseFactory.php');
-require_once(__DIR__ . '/service/PartFormFactory.php');
-require_once(__DIR__ . '/service/PartListFactory.php');
-require_once(__DIR__ . '/service/VersionFormFactory.php');
 
 // 4. API Layer (Depends on Persistence)
-require_once(__DIR__ . '/api/ApiBase.php');
-require_once(__DIR__ . '/api/ApiManager.php');
-require_once(__DIR__ . '/api/ApiPart.php');
-require_once(__DIR__ . '/api/ApiVersion.php');
-require_once(__DIR__ . '/api/Event.php');
+require_once(__DIR__ . '/api/AbstractApi.php');
+require_once(__DIR__ . '/api/ContentApi.php');
+require_once(__DIR__ . '/api/PagesApi.php');
 
-// 5. UI Rendering System (Depends on Utilities & Factories)
-require_once(__DIR__ . '/service/ui/provider/Provider.php');
-require_once(__DIR__ . '/service/ui/provider/ProviderRegistry.php');
-require_once(__DIR__ . '/service/ui/provider/SimpleProvider.php');
-require_once(__DIR__ . '/service/ui/provider/CategoriesProvider.php');
-require_once(__DIR__ . '/service/ui/provider/PartListProvider.php');
-require_once(__DIR__ . '/service/ui/renderer/Renderer.php');
-require_once(__DIR__ . '/service/ui/renderer/RendererRegistry.php');
-require_once(__DIR__ . '/service/ui/renderer/DefaultRenderer.php');
-
-require_once(__DIR__ . '/service/ui/HtmlBakery.php');
-require_once(__DIR__ . '/service/ViewRenderer.php');
-require_once(__DIR__ . '/service/PlmMgrMasterDataService.php');
-require_once(__DIR__ . '/service/PlmManagerService.php');
+require_once(__DIR__ . '/service/PlmMgrBase.php');
+require_once(__DIR__ . '/service/PlmMgrParts.php');
+require_once(__DIR__ . '/service/PlmMgrVersions.php');
+require_once(__DIR__ . '/service/PlmMgrProducts.php');
+require_once(__DIR__ . '/service/PlmMgrCompanies.php');
+require_once(__DIR__ . '/service/PlmMgrMasterdata.php');
+require_once(__DIR__ . '/service/PlmMgrService.php');
 
 // 6. Macro System (Depends on almost everything above)
 require_once(__DIR__ . '/macro/RenderContext.php');
 require_once(__DIR__ . '/macro/PlmMacro.php');
 require_once(__DIR__ . '/macro/PlmBuilderMacro.php');
-require_once(__DIR__ . '/macro/PlmBakeryMacro.php');
-require_once(__DIR__ . '/macro/PlmTest.php');
 require_once(__DIR__ . '/macro/PlmBomMacro.php');
-require_once(__DIR__ . '/macro/PlmParts.php');
-require_once(__DIR__ . '/macro/PlmPartEdit.php');
-require_once(__DIR__ . '/macro/PlmVersionEdit.php');
-require_once(__DIR__ . '/macro/PlmVersions.php');
 require_once(__DIR__ . '/macro/PlmManager.php');
 
 define('PLM_PLUGIN_TEMPLATE_DIR', __DIR__ . '/service/ui/template');
-define('PLM_MANAGER_PAGE_DIR', __DIR__ . '/macro/manager');
+define('PLM_PAGES_DIR', __DIR__ . '/service/ui/pages');

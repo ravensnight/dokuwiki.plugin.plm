@@ -3,6 +3,7 @@
 class Company extends DbObject {
     public int $id;
     public string $name;
+    public int $type_id;
     public string $description;
 
     /**
@@ -13,6 +14,7 @@ class Company extends DbObject {
         $this->id = $fields['id'];
         $this->name = $fields['name'];
         $this->description = $fields['description'];
+        $this->type_id = $fields['type_id'];
     }
 
     /**
@@ -24,15 +26,19 @@ class Company extends DbObject {
             $q = "INSERT INTO plm_companies (name, description) VALUES (:name, :description)";
             $db->querySingle($q, [
                 'name' => $this->name,
-                'description' => $this->description
+                'description' => $this->description,
+                'type_id' => $this->type_id
             ]);
+            
             $this->id = $db->lastInsertedId('plm_companies');
+
         } else {
             $q = "UPDATE plm_companies SET name = :name, description = :description WHERE id = :id";
             $db->querySingle($q, [
                 'id' => $this->id,
                 'name' => $this->name,
-                'description' => $this->description
+                'description' => $this->description,
+                'type_id' => $this->type_id
             ]);
         }
     }
@@ -49,6 +55,9 @@ class Company extends DbObject {
         $db->querySingle($q, ['id' => $this->id]);
     }
 
+    /**
+     * Get all antries
+     */
     public static function entries(PlmDB $db): array {
         $rows = $db->fetchAll("SELECT * FROM plm_companies ORDER BY name ASC;");
         $items = [];
@@ -68,5 +77,12 @@ class Company extends DbObject {
             return new self($result);
         }
         return null;
+    }
+
+    /**
+     * Get the type.
+     */
+    public function fetchType(PlmDB $db) : CompanyType {
+        return CompanyType::byPK($db, $this->type_id );
     }
 }

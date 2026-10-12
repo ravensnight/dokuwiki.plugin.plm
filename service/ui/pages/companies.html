@@ -1,0 +1,21 @@
+<div class="plm-module">
+    <h2>Companies Management</h2>
+
+    <table>
+        <thead>
+            <th class="id">ID</th>
+            <th class="name">Name</th>
+            <th class="description">Description</th>
+            <th class="type">Type</th>
+        </thead>
+        <template x-for="item in data" :key="item.id">
+            <tr>
+                <td x-text="item.id"></td>
+                <td x-text="item.name"></td>
+                <td x-text="item.description"></td>
+                <td x-text="item.type"></td>
+            </tr>
+        </template>
+    </table>
+
+</div>
