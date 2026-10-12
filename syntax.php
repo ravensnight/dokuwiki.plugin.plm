@@ -93,12 +93,13 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
     }
 
-    private function renderBlock(Doku_Renderer $renderer, RenderContext $context): bool {
+    private function renderBlock(Doku_Renderer $renderer, RenderContext $context): bool
+    {
 
         $writer = new RenderWriter($renderer);
         $writer->enableCache(false);
 
-        try {                        
+        try {
 
             $macro = null;
 
@@ -106,7 +107,7 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                 case 'bom':
                     // plm:bom > MC1210F-BLACK                    
-                    $macro = new PlmBom(PlmDB::get());
+                    $macro = new PlmBomMacro(PlmDB::get());
                     break;
 
                 case 'parts':
@@ -119,6 +120,11 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
 
                 case 'versions':
                     $macro = new PlmVersions();
+                    break;
+
+                case 'manager':
+                    // Entry point for the Single Page Application
+                    $macro = new PlmManager();
                     break;
 
                 case 'test':
@@ -142,10 +148,9 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             }
 
             return true;
-
         } catch (Throwable $e) {
 
-            $this->error($writer, 'PLM Error: ' . $e->getMessage() . ": " . json_encode($e->getTrace(), JSON_PRETTY_PRINT) );
+            $this->error($writer, 'PLM Error: ' . $e->getMessage() . ": " . json_encode($e->getTrace(), JSON_PRETTY_PRINT));
             return true;
         }
     }

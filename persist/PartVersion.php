@@ -57,6 +57,19 @@ class PartVersion extends DbObject {
     /**
      * @return PartVersion[]
      */
+    public static function entries(PlmDB $db): array
+    {
+        $rows = $db->fetchAll("SELECT * FROM plm_part_version ORDER BY id ASC;");
+        $res = [];
+        foreach ($rows as $row) {
+            $res[] = new PartVersion($row);
+        }
+        return $res;
+    }
+
+    /**
+     * @return PartVersion[]
+     */
     public static function byPartId(PlmDB $db, int $partId): ?array {
 
         $result = $db->fetchAll("SELECT * FROM  plm_part_version WHERE part_id = :part_id;", [
@@ -65,11 +78,9 @@ class PartVersion extends DbObject {
 
         if ($result) {
             $res = [];
-
             foreach ($result as $row) {
                 $res[] = new PartVersion($row);
             }
-
             return $res;
         }
 

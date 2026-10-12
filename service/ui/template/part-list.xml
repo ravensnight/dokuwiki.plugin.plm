@@ -1,6 +1,6 @@
 <div class="plm_parts" id="partlist"
         hx-get="/doku.php?plmapi=v1/parts" 
-        hx-trigger="part[event.detail.trigger=change] from:body"
+        hx-trigger="part_change from:body"
         hx-target="#partlist"
         hx-swap="innerHTML" >
     <table>

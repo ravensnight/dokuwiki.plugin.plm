@@ -61,6 +61,19 @@ class Product extends DbObject {
         return ProductVariant::byProductId($db, $this->pk);
     }
 
+    /**
+     * Get all products
+     * @return Product[]
+     */
+    public static function entries(PlmDB $db): array {
+        $rows = $db->fetchAll("SELECT * FROM plm_product ORDER BY product_id ASC;");
+        $res = [];
+        foreach ($rows as $row) {
+            $res[] = new Product($row);
+        }
+        return $res;
+    }
+
     #[Override]
     public function save(PlmDB $db)
     {

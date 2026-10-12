@@ -1,12 +1,16 @@
 <?php
 
-abstract class DbEnum extends DbObject
-{
+abstract class DbEnum extends DbObject {
 
     public string $name;
     public ?string $description = null;
-    public ?int $sort_order = null;
-    public bool $active;
+    public int $sort_order = 0;
+    public bool $active = true;
+
+    public static function fetchName(PlmDB $db, int $pk): string {
+        $obj = static::byPK($db, $pk);
+        return $obj ? $obj->name : 'N/A';
+    }
 
     protected abstract static function getTableName() : string;
 
@@ -73,12 +77,37 @@ abstract class DbEnum extends DbObject
     #[Override]
     public function save(PlmDB $db)
     {
-        throw new \Exception('Not implemented');
+        if ($this->pk) {
+            // Update
+            $q = 'UPDATE ' . static::getTableName() . ' SET name=:name, description=:description, sort_order=:sort_order, active=:active WHERE id=:pk;';
+            $db->querySingle($q, [
+                'name' => $this->name,
+                'description' => $this->description,
+                'sort_order' => $this->sort_order,
+                'active' => $this->active ? 1 : 0,
+                'pk' => $this->pk
+            ]);
+        } else {
+            // Insert
+            $q = 'INSERT INTO ' . static::getTableName() . ' (name, description, sort_order, active) VALUES (:name, :description, :sort_order, :active);';
+            $db->querySingle($q, [
+                'name' => $this->name,
+                'description' => $this->description,
+                'sort_order' => $this->sort_order,
+                'active' => $this->active ? 1 : 0
+            ]);
+            $this->pk = $db->lastInsertedId(static::getTableName());
+        }
+        return $this;
     }
 
     #[Override]
     public function delete(PlmDB $db, bool $aprove)
     {
-        throw new \Exception('Not implemented');
+        if ($this->pk) {
+            $q = 'DELETE FROM ' . static::getTableName() . ' WHERE id = :pk;';
+            $db->querySingle($q, ['pk' => $this->pk]);
+        }
+        return $this;
     }
 }

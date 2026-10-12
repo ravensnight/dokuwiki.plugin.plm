@@ -25,7 +25,7 @@ class PlmVersions extends PlmBuilderMacro
         $html->opn('div', 'plm_versions', [
             'id' => $this->ctx,
             'hx-get' => $this->PREFIX . 'versions',
-            'hx-trigger' => 'part from:body',
+            'hx-trigger' => 'part_select from:body',
             'hx-vals' => 'js:{partId: event.detail.id}',
             'hx-target' => '#' . $this->ctx,
             'hx-swap' => 'innerHTML'

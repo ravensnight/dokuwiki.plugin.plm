@@ -35,7 +35,7 @@ class ApiPart extends ApiBase {
 
         $evt = null;
         if (!empty($nodePath)) {
-            $evt = $this->doGetSingle($out, $nodePath);
+            $evt = $this->doGetItem($out, $nodePath);
         } else {
             $evt = $this->doGetList($out, $nodePath);
         }
@@ -43,7 +43,7 @@ class ApiPart extends ApiBase {
         return $evt;
     }
 
-    protected function doGetSingle(Writer $out, array $nodePath): Event
+    protected function doGetItem(Writer $out, array $nodePath): Event
     {
         $this->requireRole('reader');
 
@@ -64,12 +64,10 @@ class ApiPart extends ApiBase {
 
     protected function doGetList(Writer $out, array $nodePath): Event
     {
-        $html = new HtmlBuilder();
-        $this->requireRole('reader');
-        PartListFactory::renderPartList($html, $this->db());
-        $html->flush($out);
+        $b = new HtmlBakery();
+        $b->parse($out, PLM_PLUGIN_TEMPLATE_DIR . '/part-list.xml', []);
 
-        return Event::reset('part');
+        return Event::none('part');
     }
 
     protected function doPost(Writer $out, array $nodePath): Event

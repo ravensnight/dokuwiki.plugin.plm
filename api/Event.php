@@ -9,11 +9,9 @@ enum Trigger {
 
 class EventDetails implements JsonSerializable {
     public readonly ?int $id;
-    public readonly Trigger $trigger;
 
-    public function __construct(Trigger $trigger, ?int $id) {
+    public function __construct(?int $id) {
         $this->id = $id;
-        $this->trigger = $trigger;
     }
 
     #[Override]
@@ -21,7 +19,6 @@ class EventDetails implements JsonSerializable {
     {
         return [            
             "id" => $this->id ?? null,
-            "trigger" => $this->trigger->name
         ];
     }
 }
@@ -33,8 +30,8 @@ class Event implements JsonSerializable {
 
     public function __construct(string $name, Trigger $trigger = Trigger::none, ?int $id = null)
     {
-        $this->name = $name;
-        $this->details = new EventDetails($trigger, $id);
+        $this->name = $name . "_" . $trigger->name;
+        $this->details = new EventDetails($id);
     }
 
     public static function none(string $name): Event

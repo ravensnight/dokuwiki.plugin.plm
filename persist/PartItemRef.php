@@ -1,17 +1,17 @@
 <?php
 
 class PartItemRef extends DbObject {
-    
+
     public int $parentVersionId;
     public int $childVersionId;
     public int $quantity;
     public ?string $designators = null;
-    
+
     public function assign(array $fields) {
         $this->parentVersionId = $fields['parent_version_id'];
         $this->childVersionId = $fields['child_version_id'];
         $this->quantity = $fields['quantity'];
-        $this->designators = $fields['desginators'] ?? null;
+        $this->designators = $fields['designators'] ?? null;
     }
 
     public function createNew(int $parentVersionId, int $childVersionId, int $quantity = 1, ?string $designators = null) {
@@ -25,7 +25,7 @@ class PartItemRef extends DbObject {
 
     public static function byPK(PlmDB $db, int $pk) : ?static {
         /** @var string */
-        $q = "SELECT * FROM  plm_part_item WHERE id = :pk;";
+        $q = "SELECT * FROM plm_part_item WHERE id = :pk;";
         $result = $db->querySingle($q, [
             'pk' => $pk
         ]);
@@ -43,7 +43,7 @@ class PartItemRef extends DbObject {
     public static function byParentVersionId(PlmDB $db, int $parentVersionId): ?array
     {
         /** @var string */
-        $q = "SELECT * FROM  plm_part_item WHERE parent_version_id = :pk;";
+        $q = "SELECT * FROM plm_part_item WHERE parent_version_id = :pk;";
         $result = $db->fetchAll($q, [
             'pk' => $parentVersionId
         ]);
@@ -66,7 +66,7 @@ class PartItemRef extends DbObject {
     public static function byChildVersionId(PlmDB $db, int $childVersionId): ?array
     {
         /** @var string */
-        $q = "SELECT * FROM  plm_part_item WHERE child_version_id = :pk;";
+        $q = "SELECT * FROM plm_part_item WHERE child_version_id = :pk;";
         $result = $db->fetchAll($q, [
             'pk' => $childVersionId
         ]);
@@ -84,12 +84,24 @@ class PartItemRef extends DbObject {
     }
 
     /**
+     * @return PartItemRef[]
+     */
+    public static function entries(PlmDB $db): array {
+        $rows = $db->fetchAll("SELECT * FROM plm_part_item ORDER BY id ASC;");
+        $items = [];
+        foreach ($rows as $row) {
+            $items[] = new self($row);
+        }
+        return $items;
+    }
+
+    /**
      * @var ProductVariant[]
      */
     public function fetchVariants(PlmDB $db) : ?array {
 
         $q = 'SELECT pv.* FROM plm_product_variant pv JOIN plm_part_item_variant piv ON piv.variant_id = pv.id WHERE piv.part_item_id = :pk;';
-        
+
         $result = $db->fetchAll($q, [
             'pk' => $this->pk
         ]);
@@ -106,35 +118,39 @@ class PartItemRef extends DbObject {
         return null;
     }
 
-    public function fetchChild(PlmDB $db) : PartVersion {
-        return PartVersion::byPK($db, $this->childVersionId);
+    /**
+     * Update or create an object
+     */
+    public function save(PlmDB $db): void {
+        if (empty($this->pk)) {
+            $q = "INSERT INTO plm_part_item (parent_version_id, child_version_id, quantity, designators) VALUES (:parent_version_id, :child_version_id, :quantity, :designators)";
+            $db->querySingle($q, [
+                'parent_version_id' => $this->parentVersionId,
+                'child_version_id' => $this->childVersionId,
+                'quantity' => $this->quantity,
+                'designators' => $this->designators
+            ]);
+            $this->pk = $db->lastInsertedId('plm_part_item');
+        } else {
+            $q = "UPDATE plm_part_item SET parent_version_id = :parent_version_id, child_version_id = :child_version_id, quantity = :quantity, designators = :designators WHERE id = :id";
+            $db->querySingle($q, [
+                'id' => $this->pk,
+                'parent_version_id' => $this->parentVersionId,
+                'child_version_id' => $this->childVersionId,
+                'quantity' => $this->quantity,
+                'designators' => $this->designators // Fixed typo: was $this->designators
+            ]);
+        }
     }
 
-    public function fetchParent(PlmDB $db): PartVersion {
-        return PartVersion::byPK($db, $this->parentVersionId);
-    }
-
-    public function appliesToVariant(PlmDB $db, int $variantPK) : bool {
-        $q = 'SELECT COUNT(*) FROM plm_part_item_variant WHERE part_item_id = :itemLink AND variant_id = :variantPk;';
-
-        $result = $db->querySingle($q, [
-            'itemLink' => $this->pk,
-            'variantPk' => $variantPK
-        ]);
-
-        if (empty($result)) return false;
-        return (reset($result) > 0);
-    }
-
-    #[Override]
-    public function save(PlmDB $db)
-    {
-        throw new \Exception('Not implemented');
-    }
-
-    #[Override]
-    public function delete(PlmDB $db, bool $aprove)
-    {
-        throw new \Exception('Not implemented');
+    /**
+     * Delete the referenced object
+     */
+    public function delete(PlmDB $db, bool $approve): void {
+        if (!$approve || empty($this->pk)) {
+            return;
+        }
+        $q = "DELETE FROM plm_part_item WHERE id = :id";
+        $db->querySingle($q, ['id' => $this->pk]);
     }
 }

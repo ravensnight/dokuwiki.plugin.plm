@@ -208,6 +208,10 @@ abstract class ApiBase
                     $api = new ApiVersion($db);
                     break;
 
+                case 'manager':
+                    $api = new ApiManager($db);
+                    break;
+
                 default:
                     ApiBase::error(404, 'PLM API not found: ' . $apiName);
                     break;
@@ -243,6 +247,14 @@ abstract class ApiBase
                 $evt = $this->doPost($out, $nodePath);
                 break;
 
+            case 'put':
+                $evt = $this->doPut($out, $nodePath);
+                break;
+            
+            case 'delete':
+                $evt = $this->doDelete($out, $nodePath);
+                break;
+
             default:
                 $this->methodNotAllowed();
         }
@@ -263,4 +275,20 @@ abstract class ApiBase
      * @return Event - a html event to trigger
      */
     protected abstract function doPost(Writer $out, array $nodePath): Event;
+
+    /**
+     * @return Event - a html event to trigger
+     */
+    protected function doPut(Writer $out, array $nodePath): Event
+    {
+        ApiBase::error(405, 'Method NOT allowed');
+    }
+
+    /**
+     * @return Event - a html event to trigger
+     */
+    protected function doDelete(Writer $out, array $nodePath): Event
+    {
+        ApiBase::error(405, 'Method NOT allowed');
+    }
 }

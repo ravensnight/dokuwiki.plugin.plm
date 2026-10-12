@@ -3,7 +3,7 @@
 /**
  * PLM BOM renderer.
  */
-class PlmBom extends PlmBuilderMacro {
+class PlmBomMacro extends PlmBuilderMacro {
 
     private readonly PlmDB $db;
 
@@ -11,9 +11,9 @@ class PlmBom extends PlmBuilderMacro {
     private ?ProductVariant $variant = null;
 
     /**
-     * @param PlmDb $db
+     * @param PlmDB $db
      */
-    public function __construct(PlmDb $db) {
+    public function __construct(PlmDB $db) {
         parent::__construct();
         $this->db = $db;
     }
@@ -34,13 +34,12 @@ class PlmBom extends PlmBuilderMacro {
             throw new Exception('plm:bom - Product variant not found: ' . $this->variantName);
         }
     }
- 
+
     /**
      * Render the complete BOM.
      */
     public function build(HtmlBuilder $html): void
     {
-
         $html
             ->opn('div', 'plm-bom')
             ->opn('div', 'plm-bom-variant')
@@ -103,7 +102,6 @@ class PlmBom extends PlmBuilderMacro {
     }
 
     private function collectPartItemRefAttrs(PartItemRef $itemRef) : array {
-
         if ($itemRef !== null) {
             $variantValues = [];
             /** @var ProductVariant[] */
@@ -157,7 +155,6 @@ class PlmBom extends PlmBuilderMacro {
 
 
     private function renderPartHeader(HtmlBuilder $html, PartVersion $version, array $indexPath) : void {
-
         /** @var Part */
         $part = $version->fetchPart($this->db);
 
@@ -201,7 +198,6 @@ class PlmBom extends PlmBuilderMacro {
     }
 
     private function renderPartVersionChildren(HtmlBuilder $html, PartVersion $version, int $level, array $indexPath, array $itemPath) : void {
-
         /** @var PartItemRef[] */
         $children = $version->fetchChildren($this->db);
 
@@ -212,7 +208,6 @@ class PlmBom extends PlmBuilderMacro {
         $itemIndex = 0;
 
         foreach ($children as $itemRef) {
-
             $itemIndex += 1;
 
             $nextIndexPath = $indexPath;
@@ -226,7 +221,6 @@ class PlmBom extends PlmBuilderMacro {
      * Render variant item node.
      */
     private function renderVariantItemRef(HtmlBuilder $html, VariantItemRef $itemRef,  int $level, array $indexPath, array $itemPath ) : void {
-
         $childVersion = $itemRef->fetchChild($this->db);
         if ($childVersion === null) {
             return;
@@ -273,7 +267,6 @@ class PlmBom extends PlmBuilderMacro {
      * Render one part version recursively.
      */
     private function renderPartItemRef(HtmlBuilder $html, PartItemRef $itemRef, int $level, array $indexPath, array $itemPath): void {
-
         if (!$itemRef->appliesToVariant($this->db, $this->variant->pk)) {
             return;
         }
