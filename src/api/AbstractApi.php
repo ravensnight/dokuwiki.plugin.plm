@@ -2,40 +2,38 @@
 
 abstract class AbstractApi
 {
-    private readonly ResponseWriter $out;
+
+    protected readonly ResponseWriter $out;
 
     public function __construct(ResponseWriter $out) {
         $this->out = $out;
     }
 
-    protected function out() : ResponseWriter {
-        return $this->out;
-    }
-
-    public static function error(ResponseWriter $out, int $status, string $message): never
-    {
-        /**
-         * @var HtmlBuilder out
-         */
-        $html = new HtmlBuilder();
+    public static function halt(ResponseWriter $out, int $status, string $message, ?array $trace = null) : never {
         $out->statusCode = $status;
 
-        $html->opn('p', 'error, error' . ((string)$status));
-        $html->tag('span', (string)$status, 'code');
-        $html->tag('span', $message, 'message');
+        $res = [
+            "status" => $status,
+            "message" => $message,
+            "trace" => $trace
+        ];
 
-        $html->cls()->flush($out);
+        $out->write(json_encode($res));
         $out->flush();
-        
+
         exit;
     }
 
-    protected function requireAuthentication(): void
+    public function terminate(int $status, string $message, ?array $trace = null): never
     {
+        AbstractApi::halt($this->out, $status, $message, $trace);
+    }
+
+    protected function requireAuthentication(): void {
         global $INPUT;
         $user = $INPUT->server->str('REMOTE_USER');
         if ($user === '') {
-            AbstractApi::error($this->out, 401, 'Authentication required');
+            $this->terminate(401, 'Authentication required');
         }
     }
 
@@ -65,7 +63,7 @@ abstract class AbstractApi
         ];
 
         if (!isset($roles[$role])) {
-            AbstractApi::error($this->out, 500, 'Invalid API role' );
+            $this->terminate(500, 'Invalid API role' );
         }
 
         if (count($roles[$role]) == 0) {
@@ -81,61 +79,54 @@ abstract class AbstractApi
             }
         }
 
-        AbstractApi::error($this->out, 403, 'Forbidden' );
+        $this->terminate(403, 'Forbidden' );
     }
 
     protected function notFound(): never {
-        AbstractApi::error($this->out, 404, 'Not found' );
+        $this->terminate(404, 'Not found' );
     }
 
     protected function methodNotAllowed(string $method): never {
-        AbstractApi::error($this->out, 405, 'Method ' . $method . ' not allowed!' );
+        $this->terminate(405, 'Method ' . $method . ' not allowed!' );
     }
 
     /**
      * Request handler
      */
-    public static function handleRequest(string $uriPath): void
+    public static function handleRequest(array $path, array $params): void
     {
         /** @var ResponseWriter $w */
         $w = new ResponseWriter();
 
-        if (preg_match('#^/api/v1/([^/]+)(?:/([^?]*))?#', $uriPath, $match)) {
+        $api = null;
+        $apiName = $path[0];
 
-            $api = null;
-            $apiName = $match[1];
-            $nodePath = [];
+        $nodePath = array_slice($path, 1); // cut the api name
+        
+        switch ($apiName) {
 
-            if (isset($match[2]) && $match[2] !== '') {
-                $nodePath = explode('/', $match[2]);
-            }
+            case 'pages':
+                $api = new PagesApi($w);
+                break;
 
-            switch ($apiName) {
+            case 'content':
+                $api = new ContentApi($w);
+                break;
 
-                case 'pages':
-                    $api = new PagesApi($w);
-                    break;
-
-                case 'content':
-                    $api = new ContentApi($w);
-                    break;
-
-                default:
-                    AbstractApi::error($w, 404, 'PLM API not found: ' . $apiName);
-                    return;
-            }
-
-            // Get method and call api.
-            $method = strtolower($_SERVER['REQUEST_METHOD'] ?? 'get');
-            if ($api !== null) {
-                $api->handle($method, $nodePath);
-            }
-
-            return;
-        } else {
-            AbstractApi::error($w, 404, 'API endpoint not found: ' . var_export($uriPath, true));
-            return;
+            default:
+                AbstractApi::halt($w, 404, 'PLM API not found: ' . $apiName);
+                return;
         }
+
+        // Get method and call api.
+        $method = strtolower($_SERVER['REQUEST_METHOD'] ?? 'get');
+        if ($api !== null) {
+            $api->handle($method, $nodePath, $params);
+        }
+
+        $w->statusCode = 200;
+        $w->flush();
+        return;
     }
 
     /**
@@ -143,35 +134,37 @@ abstract class AbstractApi
      * @param string $method
      * @param string[] $nodePath
      */
-    protected final function handle(string $method, array $nodePath) {
-
-        /** @var ResponseWriter w */
-        $out = new ResponseWriter();
+    protected final function handle(string $method, array $nodePath, array $params) {
         
-        switch ($method) {
-            case 'get' :
-                $this->handleRead($out, $nodePath);
-                break;
+        try {
 
-            case 'post':
-                $this->handleWrite($out, $nodePath);
-                break;
+            switch ($method) {
+                case 'get' :
+                    $this->handleRead($nodePath, $params);
+                    break;
 
-            default:
-                $this->methodNotAllowed($method);
+                case 'post':
+                    $this->handleWrite($nodePath, $params);
+                    break;
+
+                default:
+                    $this->methodNotAllowed($method);
+            }
+
+        } catch (Exception $e) {
+            $this->terminate(400, $e->getMessage(), $e->getTrace());
         }
 
-        $out->flush();
     }
 
     /**
      * Handle some get request.
      */
-    protected abstract function handleRead(ResponseWriter $out, array $nodePath) : void;
+    protected abstract function handleRead(array $nodePath, array $params) : void;
 
     /**
      * Handle some post request.
      */
-    protected abstract function handleWrite(ResponseWriter $out, array $nodePath): void;
+    protected abstract function handleWrite(array $nodePath, array $params): void;
 
 }

@@ -9,61 +9,49 @@ class ContentApi extends AbstractApi {
     }
 
     /**
-     * GET /api/manager?view={parts|versions|bom|products|companies|master_data}
-     * 
-     * @param Writer $out
      * @param array $nodePath
      */
-    protected function handleRead(Writer $out, array $nodePath): void
+    protected function handleRead(array $nodePath, array $params): void
     {
         global $INPUT;
 
         if (!isset($nodePath[0])) {
-            AbstractApi::error($out, 404, "Invalid Content API path: " . implode('/', $nodePath));
+            $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
 
         $view = $nodePath[0];
         if ($view === null) {
-            AbstractApi::error($out, 404, "Invalid Content API path: " . implode('/', $nodePath));
+            $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
 
-
-        $params = [];
+        $p = $params;
         // Use the second nodePath element as key if it exists
         if (isset($nodePath[1]) && $nodePath[1] !== null) {
-            $params['id'] = $nodePath[1];
+            $p['id'] = $nodePath[1];
         }
 
-        // get part id
-        $partId = $INPUT->get->int('partId', null);
-        if ($partId) {
-            $params['partId'] = $partId;
-        }
-
-        $data = PlmMgrService::get()->getData($view, $params);
+        // acquire data
+        $data = PlmMgrService::get()->getData($view, $p);
 
         // write the content
-        $out->write(json_encode($data));
+        $this->out->write(json_encode($data));
     }
 
     /**
-     * POST /api/manager?view=master_data
-     * 
-     * @param Writer $out
      * @param array $nodePath
      */
-    protected function handleWrite(Writer $out, array $nodePath): void {
+    protected function handleWrite(array $nodePath, array $params): void {
         
         if (!isset($nodePath[0])) {
-            AbstractApi::error($out, 404, "Invalid Content API path: " . implode('/', $nodePath));
+            $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
 
         $view = $nodePath[0];
         if ($view === null) {
-            AbstractApi::error($out, 404, "Invalid Content API path: " . implode('/', $nodePath));
+            $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
 
@@ -77,7 +65,7 @@ class ContentApi extends AbstractApi {
         $inputData = json_decode($json, true);
 
         if (! $inputData) {
-            AbstractApi::error($out, 400, "Invalid data sent.");
+            $this->terminate(400, "Invalid data sent.");
             return;
         }
 
@@ -94,6 +82,6 @@ class ContentApi extends AbstractApi {
         }
 
         // write the content
-        $out->write(json_encode($data));
+        $this->out->write(json_encode($data));
     }
 }

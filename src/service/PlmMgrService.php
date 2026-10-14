@@ -69,7 +69,6 @@ class PlmMgrService {
      * @return array
      */
     public function getData(string $view, array $params): array {
-        $db = PlmDB::get();
 
         $subService = $this->getSubService($view);
         if ($subService) {

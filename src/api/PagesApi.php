@@ -7,21 +7,18 @@ if (!defined('DOKU_INC')) {
 class PagesApi extends AbstractApi {
 
     /**
-     * GET /api/pages?view={parts|versions|bom|products|companies|masterdata}
-     * 
-     * @param Writer $out
      * @param array $nodePath
      */
-    protected function handleRead(Writer $out, array $nodePath): void
+    protected function handleRead(array $nodePath, array $params): void
     {
         if (!isset($nodePath[0])) {
-            AbstractApi::error($out, 404, "Invalid Content API path: " . implode('/', $nodePath));
+            $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
 
         $view = $nodePath[0];
         if ($view === null) {
-            AbstractApi::error($out, 404, "Invalid Content API path: " . implode('/', $nodePath));
+            $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
 
@@ -30,21 +27,18 @@ class PagesApi extends AbstractApi {
 
         $content = file_get_contents($file);
         if ($content === null) {
-            AbstractApi::error($out, 500, "SubPage not defined for: " . implode('/', $nodePath));
+            $this->terminate(500, "SubPage not defined for: " . implode('/', $nodePath));
         }
 
         // write the content
-        $out->write($content);
+        $this->out->write($content);
     }
 
     /**
-     * POST /api/manager?view=master_data
-     * 
-     * @param Writer $out
      * @param array $nodePath
      */
-    protected function handleWrite(ResponseWriter $out, array $nodePath): void
+    protected function handleWrite(array $nodePath, array $params): void
     {
-        $this->error($this->out(), 400, "Function not supported.");
+        $this->terminate(400, "Function not supported.");
     }
 }

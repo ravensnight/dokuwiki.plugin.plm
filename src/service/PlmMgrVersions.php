@@ -12,6 +12,7 @@ class PlmMgrVersions extends PlmMgrBase {
             $partId = PlmMgrBase::partId($params);
 
             if ($partId === null) {
+                throw new Exception(json_encode($params));
                 return $this->getAll($db);
             }
             else {
@@ -35,7 +36,7 @@ class PlmMgrVersions extends PlmMgrBase {
         return $result;
     }
 
-    protected function forPk(PlmDB $db, int $key) {
+    protected function forPk(PlmDB $db, int $key) : ?array {
         $v = PartVersion::byPk($db, $key);
         if ($v === null) {
             return null;
@@ -43,7 +44,7 @@ class PlmMgrVersions extends PlmMgrBase {
         return $this->createVersionData($v);
     }
 
-    protected function forPartId(PlmDB $db, int $partId) {
+    protected function forPartId(PlmDB $db, int $partId) : ?array {
         $versions = PartVersion::byPartId($db, $partId);
         $result = [];
 

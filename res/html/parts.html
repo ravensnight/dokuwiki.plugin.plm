@@ -23,7 +23,7 @@
     </table>
 
     <template x-if="control.partSelected" >
-        <div >
+        <div class="editor-area">
             <p x-show="control.partLoading">Loading Details ...</p>
             <form x-show="!control.partLoading" >
                 <div class="form-field">
@@ -48,7 +48,6 @@
                             <option :value="cat.id" x-text="cat.name" />
                         </template>
                     </select>
-                    </template>
                 </div>
 
                 <div class="button-area" >
@@ -62,7 +61,8 @@
     </template>
 
     <h3>Part Versions</h3>
-    <table>
+    <p x-show="control.partLoading" >Loading versions ...</p>
+    <table x-show="!control.partLoading" >
         <thead>
             <th class="id">ID</th>
             <th class="name">Name</th>
@@ -80,5 +80,4 @@
             </tr>
         </template>
     </table>
-
 </div>

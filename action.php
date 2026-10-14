@@ -35,18 +35,27 @@ class action_plugin_plm extends ActionPlugin
         $event->preventDefault();
         $event->stopPropagation();
 
-        try {            
-        
-            AbstractApi::handleRequest($route);
+        try {     
+
+            $uri = parse_url($route);
+
+            $path = $uri['path'];
+
+            $segments = explode('/', trim($path, '/'));
+            $segments = array_slice($segments, 2);
+
+            $params = [];
+            parse_str($uri['query'] ?? '', $params);
+
+            AbstractApi::handleRequest($segments, $params);
+            exit;
 
         } catch (Throwable $e) {
             error_log( 'PLM API error: ' . $e->getTraceAsString());
 
             $out = new ResponseWriter();
-            AbstractApi::error($out, 500, "PLM API error: " . $e->getMessage());
+            AbstractApi::halt($out, 500, "PLM API error: " . $e->getMessage(), $e->getTrace());
         }
-
-        exit;
     }
 
     private function sendError( int $status, string $message ): void {
