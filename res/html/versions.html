@@ -10,7 +10,7 @@
             <th class="revision">Revision</th>
             <th class="status">Status</th>
         </thead>
-        <template x-for="item in data" :key="item.id">
+        <template x-for="item in control.getVersions()" :key="item.id">
             <tr>
                 <td class='id' x-text="item.id"></td>
                 <td class='ipn' x-text="item.ipn"></td>

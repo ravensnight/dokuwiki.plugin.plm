@@ -12,7 +12,7 @@
                 <th class="status">Status</th>
             </thead>
 
-            <template x-for="item in data.categories" :key="item.id">
+            <template x-for="item in control.getCategories()" :key="item.id">
                 <tr>
                     <td class="id" x-text="item.id"></td>
                     <td class="name" x-text="item.name"></td>
@@ -35,7 +35,7 @@
                 <th class="status">Status</th>
             </thead>
         
-            <template x-for="item in data.status" :key="item.id">
+            <template x-for="item in control.getStatusList()" :key="item.id">
                 <tr>
                     <td class="id" x-text="item.id"></td>
                     <td class="name" x-text="item.name"></td>
@@ -58,7 +58,7 @@
                 <th class="status">Status</th>
             </thead>
         
-            <template x-for="item in data.companyTypes" :key="item.id">
+            <template x-for="item in control.getCompanyTypes()" :key="item.id">
                 <tr>
                     <td class="id" x-text="item.id"></td>
                     <td class="name" x-text="item.name"></td>

@@ -100,7 +100,7 @@ abstract class AbstractApi
         /** @var ResponseWriter $w */
         $w = new ResponseWriter();
 
-        if (preg_match('#^/api/v1/([^/]+)(?:/(.+))?$#', $uriPath, $match)) {
+        if (preg_match('#^/api/v1/([^/]+)(?:/([^?]*))?#', $uriPath, $match)) {
 
             $api = null;
             $apiName = $match[1];

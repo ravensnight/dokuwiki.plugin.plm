@@ -1,4 +1,4 @@
-<div x-data="appContext" class="plm-app">
+<div x-data="appControl" class="plm-app">
     <header class="header">
         <nav class="navigation" >
             <button @click="loadView('parts')">Parts</button>
@@ -13,8 +13,7 @@
         <p x-show="loading">Loading...</p>
         <p x-show="error" x-text="error"></p>
 
-        <div x-html="html"></div>
-        <pre x-show="!html" x-text="JSON.stringify(data, null, 2)"></pre>
+        <div x-show="!loading" x-ref="viewContainer" x-html="html"></div>
+        <pre x-show="(!loading && !html)" >Html could not be loaded.</pre>
     </main>
 </div>
-

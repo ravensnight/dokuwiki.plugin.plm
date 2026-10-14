@@ -8,7 +8,7 @@
             <th class="name">Name</th>
             <th class="description">Description</th>
         </thead>
-        <template x-for="item in data" :key="item.id">
+        <template x-for="item in control.getProducts()" :key="item.id">
             <tr>
                 <td x-text="item.id"></td>
                 <td x-text="item.name"></td>

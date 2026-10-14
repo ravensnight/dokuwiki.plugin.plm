@@ -1,0 +1,84 @@
+<div class="plm-module">
+    <h2>Parts Management</h2>
+
+    <h3>Parts</h3>
+
+    <table>
+        <thead>
+            <th class="id">ID</th>
+            <th class="ipn">IPN</th>
+            <th class="description">Description</th>
+            <th class="category">Category</th>
+        </thead>
+        <template x-for="item in control.partList" :key="item.id">
+            <tr :class="{ 'selected' : control.partSelected.id == item.id }" >
+                <td x-text="item.id"></td>
+                <td>
+                    <a href="#" @click.prevent="control.selectPart(item.id)" x-text="item.ipn"></a>
+                </td>
+                <td x-text="item.description"></td>
+                <td x-text="control.getCategoryName(item.categoryId)"></td>
+            </tr>
+        </template>
+    </table>
+
+    <template x-if="control.partSelected" >
+        <div >
+            <p x-show="control.partLoading">Loading Details ...</p>
+            <form x-show="!control.partLoading" >
+                <div class="form-field">
+                    <label for="part-id">ID:</label>
+                    <input id="part-id" type="text" x-model="control.partSelected.id" readonly />
+                </div>
+
+                <div class="form-field">
+                    <label for="part-ipn">IPN:</label>
+                    <input id="part-ipn" type="text" x-model="control.partSelected.ipn" />
+                </div>
+
+                <div class="form-field">
+                    <label for="part-description">Description:</label>
+                    <input id="part-description" type="text" x-model="control.partSelected.description" />
+                </div>
+
+                <div class="form-field">
+                    <label for="part-category">Category:</label>
+                    <select id="part-category" x-model="control.partSelected.categoryId" >
+                        <template x-for="cat in control.getCategories()" :key="cat.id">
+                            <option :value="cat.id" x-text="cat.name" />
+                        </template>
+                    </select>
+                    </template>
+                </div>
+
+                <div class="button-area" >
+                    <button x-show="!control.partSelected.id" @click="control.submitPartItem()">Create</button>
+                    <button x-show="control.partSelected.id" @click="control.selectPart(null)">Reset</button>
+                    <button x-show="control.partSelected.id" @click="control.submitPartItem()">Submit</button>
+                    <button x-show="control.partSelected.id" @click="control.deletePartItem()">Delete</button>
+                </div>
+            </form>                
+        </div>
+    </template>
+
+    <h3>Part Versions</h3>
+    <table>
+        <thead>
+            <th class="id">ID</th>
+            <th class="name">Name</th>
+            <th class="major">Version</th>
+            <th class="revision">Revision</th>
+            <th class="status">Status</th>
+        </thead>
+        <template x-for="v in control.partVersions" :key="v.id">
+            <tr>
+                <td class='id' x-text="v.id"></td>
+                <td class='name' x-text="v.name"></td>
+                <td class='major' x-text="v.major"></td>
+                <td class='revision' x-text="v.revision"></td>
+                <td class='status' x-text="v.status"></td>
+            </tr>
+        </template>
+    </table>
+
+</div>

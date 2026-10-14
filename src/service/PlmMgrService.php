@@ -42,8 +42,16 @@ class PlmMgrService {
                     $registry[$name] = new PlmMgrCompanies();
                     break;
 
-                case 'masterdata':
-                    $registry[$name] = new PlmMgrMasterdata();
+                case 'status':
+                    $registry[$name] = new PlmMgrStatus();
+                    break;
+
+                case 'companytypes':
+                    $registry[$name] = new PlmMgrCompanyTypes();
+                    break;
+
+                case 'categories':
+                    $registry[$name] = new PlmMgrCategories();
                     break;
 
                 default:
@@ -60,14 +68,34 @@ class PlmMgrService {
      * @param string $view
      * @return array
      */
-    public function getData(string $view): array {
+    public function getData(string $view, array $params): array {
         $db = PlmDB::get();
 
         $subService = $this->getSubService($view);
         if ($subService) {
-            return $subService->getData();
+            return $subService->getData($params);
         }
 
         throw new Exception('SubService not found: ' . $view);
+    }
+
+    public function create(string $view, mixed $inputData) : mixed {
+        $subService = $this->getSubService($view);
+        if ($subService) {
+            return $subService->create($inputData);
+        }
+
+        throw new Exception('SubService not found: ' . $view);
+
+    }
+
+    public function update(string $view, mixed $inputData) : mixed {
+        $subService = $this->getSubService($view);
+        if ($subService) {
+            return $subService->update($inputData);
+        }
+
+        throw new Exception('SubService not found: ' . $view);
+
     }
 }

@@ -30,7 +30,7 @@ class PlmManager extends PlmMacro {
     public function render(Writer $out): void {
 
         // Load app main page.
-        $file = PLM_PAGES_DIR . '/appmain.html';
+        $file = PLM_HTML_DIR . '/appmain.html';
 
         $content = file_get_contents($file);
         if ($content === null) {

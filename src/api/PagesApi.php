@@ -26,7 +26,7 @@ class PagesApi extends AbstractApi {
         }
 
         // Load app main page.
-        $file = PLM_PAGES_DIR . '/' . $view .'.html';
+        $file = PLM_HTML_DIR . '/' . $view .'.html';
 
         $content = file_get_contents($file);
         if ($content === null) {
