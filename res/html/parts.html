@@ -9,15 +9,19 @@
             <th class="ipn">IPN</th>
             <th class="description">Description</th>
             <th class="category">Category</th>
+            <th class="action">Action</th>
         </thead>
         <template x-for="item in control.partList" :key="item.id">
             <tr :class="{ 'selected' : control.partSelected.id == item.id }" >
-                <td x-text="item.id"></td>
-                <td>
+                <td class="id"x-text="item.id"></td>
+                <td class="ipn">
                     <a href="#" @click.prevent="control.selectPart(item.id)" x-text="item.ipn"></a>
                 </td>
-                <td x-text="item.description"></td>
-                <td x-text="control.getCategoryName(item.categoryId)"></td>
+                <td class="description" x-text="item.description"></td>
+                <td class="category" x-text="control.getCategoryName(item.categoryId)"></td>
+                <td class="action">
+                    <a href="#" @click.prevent="control.deletePartItem(item.id)" >delete</a>
+                </td>
             </tr>
         </template>
     </table>
@@ -25,7 +29,7 @@
     <template x-if="control.partSelected" >
         <div class="editor-area">
             <p x-show="control.partLoading">Loading Details ...</p>
-            <form x-show="!control.partLoading" >
+            <form x-show="!control.partLoading" @submit.prevent="control.partSubmit(event.submitter.value)">
                 <div class="form-field">
                     <label for="part-id">ID:</label>
                     <input id="part-id" type="text" x-model="control.partSelected.id" readonly />
@@ -45,39 +49,46 @@
                     <label for="part-category">Category:</label>
                     <select id="part-category" x-model="control.partSelected.categoryId" >
                         <template x-for="cat in control.getCategories()" :key="cat.id">
-                            <option :value="cat.id" x-text="cat.name" />
+                            <option :value="cat.id" x-text="cat.name" ></option>
                         </template>
                     </select>
                 </div>
 
                 <div class="button-area" >
-                    <button x-show="!control.partSelected.id" @click="control.submitPartItem()">Create</button>
-                    <button x-show="control.partSelected.id" @click="control.selectPart(null)">Reset</button>
-                    <button x-show="control.partSelected.id" @click="control.submitPartItem()">Submit</button>
-                    <button x-show="control.partSelected.id" @click="control.deletePartItem()">Delete</button>
+                    <button x-show="control.partSelected.id" value="reset">Reset</button>
+                    <button x-show="control.partSelected.id" value="submit">Submit</button>
+                    <button x-show="!control.partSelected.id" value="submit">Create</button>
                 </div>
-            </form>                
+            </form>
         </div>
     </template>
 
     <h3>Part Versions</h3>
-    <p x-show="control.partLoading" >Loading versions ...</p>
-    <table x-show="!control.partLoading" >
-        <thead>
-            <th class="id">ID</th>
-            <th class="name">Name</th>
-            <th class="major">Version</th>
-            <th class="revision">Revision</th>
-            <th class="status">Status</th>
-        </thead>
-        <template x-for="v in control.partVersions" :key="v.id">
-            <tr>
-                <td class='id' x-text="v.id"></td>
-                <td class='name' x-text="v.name"></td>
-                <td class='major' x-text="v.major"></td>
-                <td class='revision' x-text="v.revision"></td>
-                <td class='status' x-text="v.status"></td>
-            </tr>
-        </template>
-    </table>
+    <p class="info" x-show="!control.partVersions">Select part to show versions</p>
+    <div class="part-versions" x-show="control.partVersions" >
+        <p x-show="control.partLoading" >Loading versions ...</p>
+        <table x-show="!control.partLoading" >
+            <thead>
+                <th class="id">ID</th>
+                <th class="name">Name</th>
+                <th class="major">Version</th>
+                <th class="revision">Revision</th>
+                <th class="status">Status</th>
+                <th class="action">Actions</th>
+            </thead>
+            <template x-for="v in control.partVersions" :key="v.id">
+                <tr>
+                    <td class='id' x-text="v.id"></td>
+                    <td class='name' x-text="v.name"></td>
+                    <td class='major' x-text="v.major"></td>
+                    <td class='revision' x-text="v.re_revision"></td>
+                    <td class='status' x-text="v.status"></td>
+                    <td class="action">
+                        <a href="#" @click.prevent="control.deleteVersion(v.id)">delete</a>
+                    </td>
+                </tr>
+            </template>
+        </table>
+
+    </div>
 </div>

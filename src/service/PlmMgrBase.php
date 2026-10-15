@@ -22,6 +22,11 @@ abstract class PlmMgrBase {
         throw new Exception('Function "update" not implemented.');
     }
 
+    public function delete(array $inputData): void
+    {
+        throw new Exception('Function "delete" not implemented.');
+    }
+
     protected static function transformEnum(DbEnum $entry) : array {
         return [
             "id" => $entry->pk,

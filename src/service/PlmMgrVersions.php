@@ -78,4 +78,21 @@ class PlmMgrVersions extends PlmMgrBase {
             "status" => $s ? $s->name : 'n/a'
         ];
     }
+
+    public function delete(array $inputData): void
+    {
+        $db = PlmDB::get();
+
+        $id = isset($inputData['id']) ? $inputData['id'] : null;
+        if ($id === null) {
+            throw new Exception(("Version Id must not be empty."));
+        }
+
+        $v = PartVersion::byPK($db, $id);        
+        if ($v === null) {
+            throw new Exception(("Version not found for id: " . $id));            
+        }
+
+        $v->delete($db, true);
+    }
 }

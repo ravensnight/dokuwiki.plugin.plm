@@ -14,30 +14,9 @@ class Part extends DbObject {
         $this->description = $fields['description'];
     }
 
-    /**
-     * Create a new part with all attributes as parameters
-     */
-    public static function create(PlmDB $db, int $pk, string $ipn, int $categoryId, ?string $description = null) : self {
-        $part = new self([
-            'id' => $pk,
-            'ipn' => $ipn,
-            'category_id' => $categoryId,
-            'description' => $description
-        ]);
-        
-        // Save to database
-        $q = "INSERT INTO plm_part (id, ipn, category_id, description) VALUES (:id, :ipn, :category_id, :description)";
-        $db->querySingle($q, [
-            'id' => $pk,
-            'ipn' => $ipn,
-            'category_id' => $categoryId,
-            'description' => $description
-        ]);
-        
-        return $part;
-    }
 
-    public static function createNew(Category $category, string $ipn, ?string $description) : self {
+    public static function createNew(Category $category, string $ipn, ?string $description): self
+    {
         return new self([
             'ipn' => $ipn,
             'category_id' => $category->pk,

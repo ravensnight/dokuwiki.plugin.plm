@@ -9,6 +9,7 @@ class PagesApi extends AbstractApi {
     /**
      * @param array $nodePath
      */
+    #[Override]
     protected function handleRead(array $nodePath, array $params): void
     {
         if (!isset($nodePath[0])) {
@@ -32,13 +33,5 @@ class PagesApi extends AbstractApi {
 
         // write the content
         $this->out->write($content);
-    }
-
-    /**
-     * @param array $nodePath
-     */
-    protected function handleWrite(array $nodePath, array $params): void
-    {
-        $this->terminate(400, "Function not supported.");
     }
 }

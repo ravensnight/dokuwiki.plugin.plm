@@ -1,7 +1,7 @@
 <?php
 
 class PartVersion extends DbObject {
-    
+
     public string $name;
     public int $partId;
     public int $statusId;
@@ -19,7 +19,7 @@ class PartVersion extends DbObject {
 
     public static function createNew(Part $part, Status $status, string $name, int $major = 1, int $revision = 1) : self {
         return new self([
-            'version_id' => $name, 
+            'version_id' => $name,
             'major' => $major,
             'revision' => $revision,
             'part_id' => $part->pk,
@@ -90,7 +90,7 @@ class PartVersion extends DbObject {
     /**
      * @return PartItemRef[]
      */
-    public function fetchChildren(PlmDB $db) : ?array {    
+    public function fetchChildren(PlmDB $db) : ?array {
         return PartItemRef::byParentVersionId($db, $this->pk);
     }
 
@@ -117,15 +117,49 @@ class PartVersion extends DbObject {
         return Status::byPK($db, $this->statusId);
     }
 
-    #[Override]
-    public function save(PlmDB $db)
+    /**
+     * Update or create an object
+     */
+    public function save(PlmDB $db): void
     {
-        throw new \Exception('Not implemented');
+        if (empty($this->pk)) {
+            // Create new part version - get a new ID and insert
+            $q = "INSERT INTO plm_part_version (version_id, part_id, status_id, major, revision) VALUES (:version_id, :part_id, :status_id, :major, :revision)";
+
+            $db->querySingle($q, [
+                'version_id' => $this->name,
+                'part_id' => $this->partId,
+                'status_id' => $this->statusId,
+                'major' => $this->major,
+                'revision' => $this->revision
+            ]);
+
+            // Get the newly created ID and assign it to this object
+            $this->pk = $db->lastInsertedId('plm_part_version');
+        } else {
+            // Update existing part version
+            $q = "UPDATE plm_part_version SET version_id = :version_id, part_id = :part_id, status_id = :status_id, major = :major, revision = :revision WHERE id = :id";
+
+            $db->querySingle($q, [
+                'id' => $this->pk,
+                'version_id' => $this->name,
+                'part_id' => $this->partId,
+                'status_id' => $this->statusId,
+                'major' => $this->major,
+                'revision' => $this->revision
+            ]);
+        }
     }
 
-    #[Override]
-    public function delete(PlmDB $db, bool $aprove)
+    /**
+     * Delete the referenced object
+     */
+    public function delete(PlmDB $db, bool $approve): void
     {
-        throw new \Exception('Not implemented');
+        if (!$approve || empty($this->pk)) {
+            return;
+        }
+        $q = "DELETE FROM plm_part_version WHERE id = :id";
+        $db->querySingle($q, ['id' => $this->pk]);
     }
 }

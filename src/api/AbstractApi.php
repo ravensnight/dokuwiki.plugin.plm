@@ -144,7 +144,15 @@ abstract class AbstractApi
                     break;
 
                 case 'post':
-                    $this->handleWrite($nodePath, $params);
+                    $this->handleCreate($nodePath, $params);
+                    break;
+
+                case 'put':
+                    $this->handleUpdate($nodePath, $params);
+                    break;
+
+                case 'delete':
+                    $this->handleDelete($nodePath, $params);
                     break;
 
                 default:
@@ -160,11 +168,28 @@ abstract class AbstractApi
     /**
      * Handle some get request.
      */
-    protected abstract function handleRead(array $nodePath, array $params) : void;
+    protected function handleRead(array $nodePath, array $params) : void {
+        $this->terminate(400, 'Function not supported.');
+    }
 
     /**
-     * Handle some post request.
+     * Handle some create request.
      */
-    protected abstract function handleWrite(array $nodePath, array $params): void;
+    protected function handleCreate(array $nodePath, array $params): void {
+        $this->terminate(400, 'Function not supported.');
+    }
 
+    /**
+     * Handle some update request.
+     */
+    protected function handleUpdate(array $nodePath, array $params): void {
+        $this->terminate(400, 'Function not supported.');
+    }
+
+    /**
+     * Handle some delete request.
+     */
+    protected function handleDelete(array $nodePath, array $params): void {
+        $this->terminate(400, 'Function not supported.');
+    }
 }

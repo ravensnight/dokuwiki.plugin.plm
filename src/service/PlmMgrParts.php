@@ -47,7 +47,7 @@ class PlmMgrParts extends PlmMgrBase
      * Create a new part
      *
      * @param array $data
-     * @return Part
+     * @return array
      */
     #[Override]
     public function create(array $data): array  {
@@ -68,15 +68,24 @@ class PlmMgrParts extends PlmMgrBase
         $part = Part::createNew($cat, $data['ipn'], $data['description'] ?? '');
         $part->save($db);
 
+        // create a new version object.
+        try {
+            $status = Status::byPk($db, 1); 
+            $version = PartVersion::createNew($part, $status, $part->ipn . '_v1.rev1', 1, 1);
+            $version->save($db);
+
+        } catch (Exception $e) {
+            error_log('Failed to create default version for part: ' . $e->getMessage(), 0);
+        }
+
         return $this->createPartData($part);
     }
 
     /**
      * Update an existing part
      *
-     * @param int $id
      * @param array $data
-     * @return Part
+     * @return array
      */
     #[Override]
     public function update(array $data): array
@@ -102,5 +111,31 @@ class PlmMgrParts extends PlmMgrBase
         // Save to database
         $part->save($db);
         return $this->createPartData($part);
+    }
+
+    /**
+     * Update an existing part
+     *
+     * @param array $data
+     * @return array
+     */
+    #[Override]
+    public function delete(array $data): void
+    {
+        $db = PlmDB::get();
+
+        // Find the part
+        $part = Part::byPk($db, $data['id']);
+        if ($part === null) {
+            throw new Exception('Part not found for id: ' . $data['id']);
+        }
+
+        $versions = $part->fetchVersions($db);
+        foreach ($versions as $v) {
+            $v->delete($db, true) ;
+        }
+
+        // Save to database
+        $part->delete($db, true);
     }
 }

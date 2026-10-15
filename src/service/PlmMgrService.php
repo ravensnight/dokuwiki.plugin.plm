@@ -97,4 +97,14 @@ class PlmMgrService {
         throw new Exception('SubService not found: ' . $view);
 
     }
+
+    public function delete(string $view, mixed $inputData) : void {
+        $subService = $this->getSubService($view);
+        if ($subService) {
+            $subService->delete($inputData);
+            return;
+        }
+
+        throw new Exception('SubService not found: ' . $view);
+    }
 }
