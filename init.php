@@ -37,6 +37,7 @@ require_once(__DIR__ . '/src/service/PlmMgrProducts.php');
 require_once(__DIR__ . '/src/service/PlmMgrCompanies.php');
 require_once(__DIR__ . '/src/service/PlmMgrCompanyTypes.php');
 require_once(__DIR__ . '/src/service/PlmMgrCategories.php');
+require_once(__DIR__ . '/src/service/PlmMgrVariants.php');
 require_once(__DIR__ . '/src/service/PlmMgrStatus.php');
 require_once(__DIR__ . '/src/service/PlmMgrService.php');
 

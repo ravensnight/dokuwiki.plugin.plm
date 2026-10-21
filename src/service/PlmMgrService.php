@@ -38,6 +38,10 @@ class PlmMgrService {
                     $registry[$name] = new PlmMgrProducts();
                     break;
 
+                case 'variants':
+                    $registry[$name] = new PlmMgrVariants();
+                    break;
+
                 case 'companies':
                     $registry[$name] = new PlmMgrCompanies();
                     break;

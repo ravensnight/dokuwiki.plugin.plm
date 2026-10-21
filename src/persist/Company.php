@@ -1,7 +1,7 @@
 <?php
 
 class Company extends DbObject {
-    public int $id;
+
     public string $name;
     public int $type_id;
     public string $description;
@@ -11,10 +11,25 @@ class Company extends DbObject {
      */
     protected function assign(array $fields)
     {
-        $this->id = $fields['id'];
         $this->name = $fields['name'];
         $this->description = $fields['description'];
         $this->type_id = $fields['type_id'];
+    }
+
+    /**
+     * Create a new company instance
+     *
+     * @param string $name
+     * @param string $description
+     * @return Company
+     */
+    public static function createNew(CompanyType $type, string $name, string $description): self
+    {
+        return new self([
+            'name' => $name,
+            'description' => $description,
+            'type_id' => $type->pk
+        ]);
     }
 
     /**
@@ -22,20 +37,20 @@ class Company extends DbObject {
      */
     public function save(PlmDB $db): void
     {
-        if (empty($this->id)) {
-            $q = "INSERT INTO plm_companies (name, description) VALUES (:name, :description)";
+        if (empty($this->pk)) {
+            $q = "INSERT INTO plm_companies (name, description, type_id) VALUES (:name, :description, :type_id)";
             $db->querySingle($q, [
                 'name' => $this->name,
                 'description' => $this->description,
                 'type_id' => $this->type_id
             ]);
-            
-            $this->id = $db->lastInsertedId('plm_companies');
+
+            $this->pk = $db->lastInsertedId('plm_companies');
 
         } else {
-            $q = "UPDATE plm_companies SET name = :name, description = :description WHERE id = :id";
+            $q = "UPDATE plm_companies SET name = :name, description = :description, type_id = :type_id WHERE id = :pk";
             $db->querySingle($q, [
-                'id' => $this->id,
+                'pk' => $this->pk,
                 'name' => $this->name,
                 'description' => $this->description,
                 'type_id' => $this->type_id
@@ -48,15 +63,15 @@ class Company extends DbObject {
      */
     public function delete(PlmDB $db, bool $approve): void
     {
-        if (!$approve || empty($this->id)) {
+        if (!$approve || empty($this->pk)) {
             return;
         }
-        $q = "DELETE FROM plm_companies WHERE id = :id";
-        $db->querySingle($q, ['id' => $this->id]);
+        $q = "DELETE FROM plm_companies WHERE id = :pk";
+        $db->querySingle($q, ['pk' => $this->pk]);
     }
 
     /**
-     * Get all antries
+     * Get all entries
      */
     public static function entries(PlmDB $db): array {
         $rows = $db->fetchAll("SELECT * FROM plm_companies ORDER BY name ASC;");

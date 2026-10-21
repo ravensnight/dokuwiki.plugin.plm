@@ -11,6 +11,11 @@ abstract class PlmMgrBase {
         return $params['partId'];
     }
 
+    protected static function productId(array $params): ?int
+    {
+        return $params['productId'];
+    }
+
     /** Provide the data for a certain section */
     public abstract function getData(array $params) : ?array;
 

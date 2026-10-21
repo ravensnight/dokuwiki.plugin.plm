@@ -11,13 +11,13 @@ class PlmMgrStatus extends PlmMgrBase {
 
         if ($key === null) {
             /** @var Status[] */
-            $categories = Status::fetchAll($db);
-            return PlmMgrBase::transformEnumList($categories);
+            $status = Status::fetchAll($db);
+            return PlmMgrBase::transformEnumList($status);
         } else {
 
             /** @var Status */
-            $cat = Status::byPK($db, $key);
-            return PlmMgrBase::transformEnum($cat);
+            $status = Status::byPK($db, $key);
+            return PlmMgrBase::transformEnum($status);
         }
     }
 }

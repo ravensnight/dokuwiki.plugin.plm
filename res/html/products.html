@@ -7,15 +7,112 @@
             <th class="id">ID</th>
             <th class="name">Name</th>
             <th class="description">Description</th>
+            <th class="action">Action</th>
         </thead>
-        <template x-for="item in control.getProducts()" :key="item.id">
-            <tr>
-                <td x-text="item.id"></td>
-                <td x-text="item.name"></td>
+        <template x-for="item in control.products" :key="item.id">
+            <tr :class="{ 'selected' : control.selectedProduct && (control.selectedProduct.id == item.id) }">
+                <td class="id" x-text="item.id"></td>
+                <td class="name">
+                    <a href="#" @click.prevent="control.selectProduct(item.id)" x-text="item.name"></a>
+                </td>
                 <td x-text="item.description"></td>
+                <td class="action">
+                    <a href="#" @click.prevent="control.deleteProduct(item.id)">delete</a>
+                </td>
             </tr>
         </template>
     </table>
 
+    <template x-if="control.selectedProduct">
+        <div class="editor-area">
+            <p x-show="control.productLoading">Loading Details ...</p>
+            <form x-show="!control.productLoading" @submit.prevent="control.submitProduct(event.submitter.value)">
+                <div class="form-field">
+                    <label for="product-id">ID:</label>
+                    <input id="product-id" type="text" x-model="control.selectedProduct.id" readonly />
+                </div>
+    
+                <div class="form-field">
+                    <label for="product-name">Name:</label>
+                    <input id="product-name" type="text" x-model="control.selectedProduct.name" />
+                </div>
+    
+                <div class="form-field">
+                    <label for="product-description">Description:</label>
+                    <input id="product-description" type="text" x-model="control.selectedProduct.description" />
+                </div>
+    
+                <div class="button-area">
+                    <button x-show="control.selectedProduct.id" value="reset">Reset</button>
+                    <button x-show="control.selectedProduct.id" value="submit">Submit</button>
+                    <button x-show="!control.selectedProduct.id" value="submit">Create</button>
+                </div>
+            </form>
+        </div>
+    </template>
+
+    <div x-show="!control.selectedProduct" class="button-area">
+        <button @click.prevent="control.selectProduct(null)">Create New</button>
+    </div>
+
     <h3>Product Variants</h3>
+    <p class="info" x-show="!control.selectedProduct">No product selected yet.<p/>
+    <template x-if="control.selectedProduct">
+        <table>
+            <thead>
+                <tr>
+                    <th class="id">ID</th>
+                    <th class="name">Name</th>
+                    <th class="description">Description</th>
+                    <th class="action">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="v in control.variants" :key="v.id">
+                    <tr :class="{ 'selected' : control.selectedVariant && (control.selectedVariant.id == v.id) }">
+                        <td class="id" x-text="v.id"></td>
+                        <td class="name">
+                            <a href="#" @click.prevent="control.selectVariant(v.id)" x-text="v.name"></a>
+                        </td>
+                        <td x-text="v.description"></td>
+                        <td class="action">
+                            <a href="#" @click.prevent="control.deleteVariant(v.id)">delete</a>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </template>
+
+    <template x-if="control.selectedVariant">
+        <div class="editor-area">
+            <form @submit.prevent="control.submitVariant(event.submitter.value)">
+                <div class="form-field">
+                    <label for="variant-id">ID:</label>
+                    <input id="variant-id" type="text" x-model="control.selectedVariant.id" readonly />
+                </div>
+    
+                <div class="form-field">
+                    <label for="variant-name">Name:</label>
+                    <input id="variant-name" type="text" x-model="control.selectedVariant.name" />
+                </div>
+    
+                <div class="form-field">
+                    <label for="variant-description">Description:</label>
+                    <input id="variant-description" type="text" x-model="control.selectedVariant.description" />
+                </div>
+    
+                <div class="button-area">
+                    <button x-show="control.selectedVariant.id" value="reset">Reset</button>
+                    <button x-show="control.selectedVariant.id" value="submit">Submit</button>
+                    <button x-show="!control.selectedVariant.id" value="submit">Create</button>
+                </div>
+            </form>
+        </div>
+    </template>
+
+    <div x-show="control.selectedProduct && !control.selectedVariant" class="button-area">
+        <button @click.prevent="control.selectVariant(null)">New Variant</button>
+    </div>
+
 </div>

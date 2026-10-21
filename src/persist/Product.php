@@ -75,14 +75,34 @@ class Product extends DbObject {
     }
 
     #[Override]
-    public function save(PlmDB $db)
+    public function save(PlmDB $db): void
     {
-        throw new \Exception('Not implemented');
+        if (empty($this->pk)) {
+            $q = "INSERT INTO plm_product (product_id, description) VALUES (:product_id, :description)";
+            $db->querySingle($q, [
+                'product_id' => $this->name,
+                'description' => $this->description
+            ]);
+
+            $this->pk = $db->lastInsertedId('plm_product');
+
+        } else {
+            $q = "UPDATE plm_product SET product_id = :product_id, description = :description WHERE id = :id";
+            $db->querySingle($q, [
+                'id' => $this->pk,
+                'product_id' => $this->name,
+                'description' => $this->description
+            ]);
+        }
     }
 
     #[Override]
-    public function delete(PlmDB $db, bool $aprove)
+    public function delete(PlmDB $db, bool $approve): void
     {
-        throw new \Exception('Not implemented');
+        if (!$approve || empty($this->pk)) {
+            return;
+        }
+        $q = "DELETE FROM plm_product WHERE id = :id";
+        $db->querySingle($q, ['id' => $this->pk]);
     }
 }

@@ -140,9 +140,9 @@ class ContentApi extends AbstractApi {
         }
 
         $inputData['id'] = $key;
-        $data = PlmMgrService::get()->delete($view, $inputData);
+        PlmMgrService::get()->delete($view, $inputData);
 
         // write the content
-        $this->out->write(json_encode($data));
+        $this->out->write(json_encode(null));
     }    
 }

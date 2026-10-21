@@ -67,22 +67,25 @@
     <p class="info" x-show="!control.partVersions">Select part to show versions</p>
     <div class="part-versions" x-show="control.partVersions" >
         <p x-show="control.partLoading" >Loading versions ...</p>
-        <table x-show="!control.partLoading" >
+
+        <table x-show="!control.partLoading && (control.partVersions != null) && (control.partVersions.length > 0)" >
             <thead>
                 <th class="id">ID</th>
                 <th class="name">Name</th>
-                <th class="major">Version</th>
+                <th class="major">Major</th>
                 <th class="revision">Revision</th>
                 <th class="status">Status</th>
                 <th class="action">Actions</th>
             </thead>
             <template x-for="v in control.partVersions" :key="v.id">
-                <tr>
+                <tr :class="{ 'selected' : (control.partVersionEdit != null) && (control.partVersionEdit.id == v.id) }">
                     <td class='id' x-text="v.id"></td>
-                    <td class='name' x-text="v.name"></td>
+                    <td class='name'>
+                        <a href="#" @click.prevent="control.selectVersion(v.id)" x-text="v.name"></a>
+                    </td>
                     <td class='major' x-text="v.major"></td>
-                    <td class='revision' x-text="v.re_revision"></td>
-                    <td class='status' x-text="v.status"></td>
+                    <td class='revision' x-text="v.revision"></td>
+                    <td class='status' x-text="control.getStatusName(v.statusId)"></td>
                     <td class="action">
                         <a href="#" @click.prevent="control.deleteVersion(v.id)">delete</a>
                     </td>
@@ -90,5 +93,53 @@
             </template>
         </table>
 
+        <div class="editor-area" x-show="!control.partLoading && (control.partVersions == null || control.partVersions.length == 0)">
+            <form @submit.prevent="control.versionSubmit(event.submitter.value)">
+                <div class="button-area">
+                    <button value="createDefault">Create Default Version</button>
+                </div>
+            </form>
+        </div>
+
+        <template x-if="control.partVersionEdit != null">
+            <div class="editor-area">
+                <form x-show="control.partVersions.length > 0" @submit.prevent="control.versionSubmit(event.submitter.value)">
+                    <div class="form-field">
+                        <label for="version-id">ID:</label>
+                        <input id="version-id" type="text" x-model="control.partVersionEdit.id" readonly />
+                    </div>
+        
+                    <div class="form-field">
+                        <label for="version-name">Name:</label>
+                        <input id="version-name" type="text" x-model="control.partVersionEdit.name" />
+                    </div>
+        
+                    <div class="form-field">
+                        <label for="version-major">Major Version:</label>
+                        <input id="version-major" type="text" x-model="control.partVersionEdit.major" readonly />
+                    </div>
+        
+                    <div class="form-field">
+                        <label for="version-revision">Revision:</label>
+                        <input id="version-revision" type="text" x-model="control.partVersionEdit.revision" readonly />
+                    </div>
+        
+                    <div class="form-field">
+                        <label for="version-status">Category:</label>
+                        <select id="version-status" x-model="control.partVersionEdit.statusId">
+                            <template x-for="stat in control.getStatus()" :key="stat.id">
+                                <option :value="stat.id" x-text="stat.name"></option>
+                            </template>
+                        </select>
+                    </div>
+        
+                    <div class="button-area">
+                        <button value="nextMajor" >New Major</button>
+                        <button value="nextRevision" >New Revision</button>
+                        <button value="submit">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </template>
     </div>
 </div>

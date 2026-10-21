@@ -14,7 +14,6 @@ class Part extends DbObject {
         $this->description = $fields['description'];
     }
 
-
     public static function createNew(Category $category, string $ipn, ?string $description): self
     {
         return new self([

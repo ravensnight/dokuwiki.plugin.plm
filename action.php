@@ -57,20 +57,5 @@ class action_plugin_plm extends ActionPlugin
             AbstractApi::halt($out, 500, "PLM API error: " . $e->getMessage(), $e->getTrace());
         }
     }
-
-    private function sendError( int $status, string $message ): void {
-        http_response_code($status);
-        header(
-            'Content-Type: application/json; charset=utf-8'
-        );
-
-        echo json_encode(
-            [
-                'success' => false,
-                'error'   => $message
-            ],
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        );
-    }
 }
 

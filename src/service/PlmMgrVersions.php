@@ -67,7 +67,6 @@ class PlmMgrVersions extends PlmMgrBase {
     {
         $db = PlmDB::get();
         $p = $v->fetchPart($db);
-        $s = $v->fetchStatus($db);
 
         return [
             "id" => $v->pk,
@@ -75,7 +74,7 @@ class PlmMgrVersions extends PlmMgrBase {
             "name" => $v->name,
             "major" => $v->major,
             "revision" => $v->revision,
-            "status" => $s ? $s->name : 'n/a'
+            "statusId" => $v->statusId
         ];
     }
 
@@ -88,11 +87,98 @@ class PlmMgrVersions extends PlmMgrBase {
             throw new Exception(("Version Id must not be empty."));
         }
 
-        $v = PartVersion::byPK($db, $id);        
+        $v = PartVersion::byPK($db, $id);
         if ($v === null) {
-            throw new Exception(("Version not found for id: " . $id));            
+            throw new Exception(("Version not found for id: " . $id));
         }
 
         $v->delete($db, true);
     }
+
+    #[Override]
+    public function update(array $inputData): array
+    {
+        $db = PlmDB::get();
+
+        $id = isset($inputData['id']) ? $inputData['id'] : null;
+        if ($id === null) {
+            throw new Exception("Version Id must not be empty.");
+        }
+
+        $v = PartVersion::byPK($db, $id);
+        if ($v === null) {
+            throw new Exception("Version not found for id: " . $id);
+        }
+
+        // Update the version fields
+        if (isset($inputData['partId'])) {
+            $part = Part::byPK($db, $inputData['partId']);
+            if ($part === null) {
+                throw new Exception("Part ID not found: " . $inputData['partId']);
+            }
+            $v->partId = $part->pk;
+        }
+
+        if (isset($inputData['statusId'])) {
+            $stat = Status::byPK($db, $inputData['statusId']);
+            if ($stat === null) {
+                throw new Exception("Status ID not found: " . $inputData['statusId']);
+            }
+            $v->statusId = $stat->pk;
+        }
+
+        if (isset($inputData['name'])) {
+            $v->name = $inputData['name'];
+        }
+
+        if (isset($inputData['major'])) {
+            $v->major = $inputData['major'];
+        }
+
+        if (isset($inputData['revision'])) {
+            $v->revision = $inputData['revision'];
+        }
+
+        // Save the updated version
+        $v->save($db);
+
+        // Return the updated version data
+        return $this->createVersionData($v);
+    }
+
+    #[Override]
+    public function create(array $inputData): array
+    {
+        $db = PlmDB::get();
+
+        $part = Part::byPK($db, $inputData['partId']);
+        if ($part === null) {
+            throw new Exception("Part ID not found: " . $inputData['partId']);
+        }
+
+        $stat = Status::byPK($db, $inputData['statusId']);
+        if ($stat === null) {
+            throw new Exception("Status ID not found: " . $inputData['statusId']);
+        }
+
+        if ($inputData['revision'] === null) {
+            throw new Exception("Revision number is not set.");
+        }
+
+        if ($inputData['major'] === null) {
+            throw new Exception("Major version number is not set.");
+        }
+
+        $name = $inputData['name'];
+        if ($name === null) {
+            $name = $part->ipn . '_v' . $inputData['major'] . '.rev' . $inputData['revision'];
+        }
+
+        $createdVersion = PartVersion::createNew($part, $stat, $name, $inputData['major'], $inputData['revision']);
+        $createdVersion->save($db);
+
+        return $this->createVersionData($createdVersion);
+    }
+
+    
 }

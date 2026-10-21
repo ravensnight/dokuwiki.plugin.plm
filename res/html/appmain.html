@@ -1,10 +1,10 @@
 <div x-data="appControl" class="plm-app">
     <header class="header">
         <nav class="navigation" >
-            <button @click="loadView('parts')">Parts</button>
-            <button @click="loadView('versions')">Versions</button>
-            <button @click="loadView('bom')">BOM</button>
             <button @click="loadView('products')">Products</button>
+            <button @click="loadView('parts')">Parts</button>
+            <button x-show="false" @click="loadView('versions')">Versions</button>
+            <button @click="loadView('bom')">BOM</button>
             <button @click="loadView('companies')">Companies</button>
             <button @click="loadView('masterdata')">Master Data</button>
         </nav>

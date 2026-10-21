@@ -11,7 +11,7 @@ class AppControl {
 
     /** Load the default view */
     async init() {
-        this.loadView('parts');
+        this.loadView('products');
     }
 
     /** Load  */
@@ -61,24 +61,33 @@ class AppControl {
         switch (view) {
             case 'parts':
                 res = new Parts();
-                await res.init();
-                return res;
+                break;
 
             case 'versions':
-                return new Versions();
+                res = new Versions();
+                break;
 
             case 'products':
-                return new Products();
+                res = new Products();
+                break;
 
             case 'masterdata':
-                return new Masterdata();
+                res = new Masterdata();
+                break;
 
             case 'companies':
-                return new Companies();
+                res = new Companies();
+                break;
 
             default:
                 throw new Error("No controller define for view: " + view);
 
         }
+
+        if ('init' in res && typeof res.init === 'function') {
+            await res.init();
+        }        
+
+        return res;
     }
 }

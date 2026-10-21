@@ -1,7 +1,7 @@
 <?php
 
 class ProductVariant extends DbObject {
-    
+
     public int $productId;
     public string $name;
     public ?string $description = null;
@@ -15,12 +15,29 @@ class ProductVariant extends DbObject {
     /**
      * Create new instance
      */
-    public static function createNew(string $name, Product $product, ?string $description) : self {
+    public static function createNew(Product $product, string $name, ?string $description) : self {
         return new self([
             'variant_id' => $name,
             'product_id' => $product->pk,
             'description' => $description
         ]);
+    }
+
+    /**
+     * @result self[]
+     */
+    public static function entries(PlmDB $db): array {
+
+        $list = $db->fetchAll("SELECT * FROM plm_product_variant");
+        $result = [];
+
+        if ($list) {
+            foreach ($list as $entry) {
+                $result[] = new self($entry);
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -94,15 +111,41 @@ class ProductVariant extends DbObject {
         return VariantItemRef::byProductVariantId($db, $this->pk);
     }
 
-    #[Override]
-    public function save(PlmDB $db)
+    /**
+     * Update or create an object
+     */
+    public function save(PlmDB $db): void
     {
-        throw new \Exception('Not implemented');
+        if (empty($this->pk)) {
+            $q = "INSERT INTO plm_product_variant (variant_id, product_id, description) VALUES (:variant_id, :product_id, :description)";
+            $db->querySingle($q, [
+                'variant_id' => $this->name,
+                'product_id' => $this->productId,
+                'description' => $this->description
+            ]);
+
+            $this->pk = $db->lastInsertedId('plm_product_variant');
+
+        } else {
+            $q = "UPDATE plm_product_variant SET variant_id = :variant_id, product_id = :product_id, description = :description WHERE id = :pk";
+            $db->querySingle($q, [
+                'pk' => $this->pk,
+                'variant_id' => $this->name,
+                'product_id' => $this->productId,
+                'description' => $this->description
+            ]);
+        }
     }
 
-    #[Override]
-    public function delete(PlmDB $db, bool $aprove)
+    /**
+     * Delete the referenced object.
+     */
+    public function delete(PlmDB $db, bool $approve): void
     {
-        throw new \Exception('Not implemented');
+        if (!$approve || empty($this->pk)) {
+            return;
+        }
+        $q = "DELETE FROM plm_product_variant WHERE id = :pk";
+        $db->querySingle($q, ['pk' => $this->pk]);
     }
 }
