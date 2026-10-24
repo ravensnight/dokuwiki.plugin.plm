@@ -1,6 +1,8 @@
-class AppControl {
+class AppControl extends Page {
 
     constructor() {
+        super()
+
         this.html = '';
         this.view = null;
         this.control = null;
@@ -11,6 +13,8 @@ class AppControl {
 
     /** Load the default view */
     async init() {
+
+        console.log("AppControl::init()");
         this.loadView('products');
     }
 
@@ -20,19 +24,22 @@ class AppControl {
         this.loading = true;
         try {
             this.error = '';
-            this.view = null;
+            this.view = view;
 
             // create the controller
+
+            console.log("Load control: " + view);
             this.control = await this.getViewControl(view);            
 
             // Wait for the HTML to load
+            console.log("Load html: " + view);
             this.html = await this.loadHtml(view);
-
-            // Wait until Alpine has updated the DOM
-            // await new Promise(resolve => this.$nextTick(resolve));
-
-            // Initialize the newly inserted HTML
-            // Alpine.initTree(this.$refs.viewContainer);
+            
+            // initialize the control.
+            if ('setup' in this.control && typeof this.control.setup === 'function') {
+                console.log("Call setup: " + view);
+                await this.control.setup();
+            } 
 
         } catch (error) {
             this.error = `Failed to fetch view: ${error.message}`;
@@ -41,19 +48,6 @@ class AppControl {
         } finally {
             this.loading = false;
         }
-    }
-
-    async loadHtml(view) {
-
-        const response = await fetch(
-            `/doku.php?plm=/api/v1/pages/${encodeURIComponent(view)}`
-        );
-
-        if (!response.ok) {
-            throw new Exception(`Failed to load view: ${response.status} - ${response.text()}`);
-        } 
-
-        return response.text();
     }
 
     async getViewControl(view) {
@@ -83,10 +77,6 @@ class AppControl {
                 throw new Error("No controller define for view: " + view);
 
         }
-
-        if ('init' in res && typeof res.init === 'function') {
-            await res.init();
-        }        
 
         return res;
     }

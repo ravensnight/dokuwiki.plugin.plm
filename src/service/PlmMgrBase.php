@@ -38,7 +38,7 @@ abstract class PlmMgrBase {
             "name" => $entry->name,
             "description" => $entry->description,
             "sortorder" => $entry->sort_order,
-            "status" => $entry->active ? 'active' : 'inactive'
+            "status" => $entry->active
         ];
     }
 

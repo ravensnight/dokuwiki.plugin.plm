@@ -1,0 +1,76 @@
+<h3 x-text="`${metadata.title} Overview`"></h3>
+
+<!-- Table -->
+<template x-if="items">
+    <table>
+        <thead>
+            <tr>
+                <template x-for="f in metadata.fields" :key="f.name">
+                    <template x-if="!f.hidden">
+                        <th :class="f.name" x-text="f.label"></th>
+                    </template>
+                </template>
+                <th class="action">Action</th>
+            </tr>
+        </thead>
+        <template x-for="i in items" :key="i.id">
+            <tr :class="(selectedId === i.id) ? 'selected' : ''" >
+                <template x-for="f in metadata.fields" :key="f.name">
+                    <template x-if="!f.hidden">
+                        <td :class="f.name">
+                            <template x-if="f.select">
+                                <a href="#" @click.prevent="doSelect(i[f.select])" x-text="resolve(i, f)"></a>
+                            </template>
+                            <template x-if="!f.select">
+                                <span x-text="resolve(i, f)"></span>
+                            </template>
+                        </td>
+                    </template>
+                </template>
+                <td class="action">
+                    <a href="#" @click.prevent="doEdit(i.id)"><i class="fa fa-pencil-square-o"></i></a>
+                    <a href="#" @click.prevent="doDelete(i.id)"><i class="fa fa-remove"></i></a>
+                </td>
+            </tr>
+        </template>
+    </table>
+</template>
+
+<!-- New button for current table -->
+<button x-show="!current" @click.prevent="doEdit(null)" x-text="`New ${metadata.title}`"></button>
+
+<!-- Editor for current table entries -->
+<template x-if="current">
+    <div>
+        <h3 x-text="`${metadata.title} Editor`"></h3>
+        <div class="editor-area">
+            <form @submit.prevent="doSubmit(event.submitter.value)">
+                <template x-for="f in metadata.fields">
+                    <div x-show="!f.hidden" class="form-field">
+                        <label :for="`editor-${f.name}`" x-text="f.label">ID:</label>
+                        <template x-if="!f.editable">
+                            <input :id="`editor-${f.name}`" type="text" :value="resolve(current, f)" readonly />
+                        </template>
+                        <template x-if="f.editable && !f.choice">
+                            <input :id="`editor-${f.name}`" type="text" x-model="current[f.name]" />
+                        </template>
+                        <template x-if="f.editable && f.choice">
+                            <select :id="`editor-${f.name}`" x-model="current[f.name]">
+                                <template x-for="c in f.choice" :key="c.id">
+                                    <option :value="c.id" x-text="c.name"></option>
+                                </template>
+                            </select>
+                        </template>
+                    </div>                        
+                </template>
+
+                <div class="button-area">
+                    <button value="cancel">Cancel</button>
+                    <button x-show="current.id" value="reset">Clear</button>
+                    <button x-show="current.id" value="save">Submit</button>
+                    <button x-show="!current.id" value="save">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</template>

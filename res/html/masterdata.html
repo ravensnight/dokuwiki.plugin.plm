@@ -1,72 +1,16 @@
-<div class="plm-module">
+<div x-data="control" class="plm-module">
     <h2>Master Data Management</h2>
 
-    <h3>Categories</h3>
-    <div class="section categories">
-        <table>
-            <thead>
-                <th class="id">ID</th>
-                <th class="name">Name</th>
-                <th class="description">Description</th>
-                <th class="sortorder">Sort Order</th>
-                <th class="status">Status</th>
-            </thead>
+    <template x-if="categories">
+        <section x-data="categories" x-html="html()"></section>
+    </template>
 
-            <template x-for="item in control.getCategories()" :key="item.id">
-                <tr>
-                    <td class="id" x-text="item.id"></td>
-                    <td class="name" x-text="item.name"></td>
-                    <td class="description" x-text="item.description"></td>
-                    <td class="sortorder" x-text="item.sortorder"></td>
-                    <td class="status" x-text="item.status"></td>
-                </tr>
-            </template>
-        </table>
-    </div>
+    <template x-if="status">
+        <section x-data="status" x-html="html()"></section>
+    </template>
 
-    <h3>Status</h3>
-    <div class="section status">
-        <table>
-            <thead>
-                <th class="id">ID</th>
-                <th class="name">Name</th>
-                <th class="description">Description</th>
-                <th class="sortorder">Sort Order</th>
-                <th class="status">Status</th>
-            </thead>
-        
-            <template x-for="item in control.getStatusList()" :key="item.id">
-                <tr>
-                    <td class="id" x-text="item.id"></td>
-                    <td class="name" x-text="item.name"></td>
-                    <td class="description" x-text="item.description"></td>
-                    <td class="sortorder" x-text="item.sortorder"></td>
-                    <td class="status" x-text="item.status"></td>
-                </tr>
-            </template>
-        </table>
-    </div>
+    <template x-if="companyTypes">
+        <section x-data="companyTypes" x-html="html()"></section>
+    </template>
 
-    <h3>Company Types</h3>
-    <div class="section companytypes">
-        <table>
-            <thead>
-                <th class="id">ID</th>
-                <th class="name">Name</th>
-                <th class="description">Description</th>
-                <th class="sortorder">Sort Order</th>
-                <th class="status">Status</th>
-            </thead>
-        
-            <template x-for="item in control.getCompanyTypes()" :key="item.id">
-                <tr>
-                    <td class="id" x-text="item.id"></td>
-                    <td class="name" x-text="item.name"></td>
-                    <td class="description" x-text="item.description"></td>
-                    <td class="sortorder" x-text="item.sortorder"></td>
-                    <td class="status" x-text="item.status"></td>
-                </tr>
-            </template>
-        </table>
-    </div>
 </div>

@@ -70,7 +70,7 @@ class PlmMgrVersions extends PlmMgrBase {
 
         return [
             "id" => $v->pk,
-            "ipn" => $p ? $p->ipn : 'n/a',
+            "partId" => $v->partId,
             "name" => $v->name,
             "major" => $v->major,
             "revision" => $v->revision,

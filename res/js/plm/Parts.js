@@ -3,19 +3,11 @@ class Parts {
     constructor() {
         this.categories = null;
         this.statusList = null;
-        this.partLoading = false;
-        this.partSelected = null;
-        this.partList = [];
-        this.partVersions = null;
-
-        this.partURI = '/doku.php?plm=/api/v1/content/parts';
-        this.versionsURI = '/doku.php?plm=/api/v1/content/versions';
-
-        this.selectPart(null);
-
+        this.parts = null;
+        this.versions = null;
     }
 
-    async init() {
+    async setup() {
         if (this.categories == null) {
             const response = await fetch('/doku.php?plm=/api/v1/content/categories');
             if (!response.ok) {
@@ -34,144 +26,118 @@ class Parts {
             this.statusList = await response.json();
         }
 
-        this.partList = await this.getParts();
-    }
+        this.parts = new ItemContainer(
+            '/doku.php?plm=/api/v1/content/parts',
+            {
+                "title": "Part",
+                "fields" : [
+                    {
+                        'name': 'id',
+                        'label': 'ID',
+                        'editable': false
+                    },
+                    {
+                        'name': 'ipn',
+                        'label': 'IPN',
+                        'editable': true,
+                        'select': 'id'
+                    },
+                    {
+                        'name': 'description',
+                        'label': 'Description',
+                        'editable': true
+                    },
+                    {
+                        'name': 'categoryId',
+                        'label': 'Category',
+                        'editable': true,
+                        'choice' : this.categories
+                    },
+                ]
+            }, 
+            {
+                "id" : null,
+                "ipn" : '',
+                "description" : '',
+                "categoryId": this.categories[0].id
+            },
+            (partId) => this.selectPart(partId)
+        )
 
-    async getCategories() {
-        return this.categories;
-    }
-
-    async getCategoryName(catId) {
-        const result = this.categories.find(cat => cat.id === catId);
-        return result.name;
-    }
-
-    async getStatus() {
-        return this.statusList;
-    }
-
-    async getStatusName(statusId) {
-        const result = this.statusList.find(stat => stat.id === statusId);
-        return result.name;
-    }
-
-    /** Load all parts */
-    async getParts() {
-        const response = await fetch(this.partURI);
-        if (!response.ok) {
-            throw new Error(`Failed to load view data: ${response.status} - ${response.text}`);
-        }
-
-        return await response.json();
-    }
-
-    async getVersions(partId) {
-        const versions = await fetch(`${this.versionsURI}?partId=${partId}`);
-        if (!versions.ok) {
-            throw new Error(`Failed to load part versions ${partId}: ${versions.status} - ${versions.text}`);
-        }
-
-        return await versions.json();
+        await this.parts.loadItems();
     }
 
     async selectPart(partId) {
-        this.partLoading = true;
 
-        /**
-         * Load the part itself
-         */
-        if (partId) {
-            const response = await fetch(`${this.partURI}/${partId}`);
-            if (!response.ok) {
-                throw new Error(`Failed to load part ${partId}: ${response.status} - ${response.text}`);
-            }
+        if (!partId) {
+            this.versions = null;
+            return;
+        }
 
-            this.partSelected = await response.json();
-            this.partVersions = await this.getVersions(partId);
-            this.partVersionEdit = null;
+        const defaults = {
+            "id" : null,
+            "name" : '',
+            "description" : '',
+            "major" : 1,
+            "revision" : 1,
+            "statusId": this.statusList[0].id,
+            "partId" : partId
+        };
+
+        if (this.versions == null) {
+
+            this.versions = new ItemContainer(
+                '/doku.php?plm=/api/v1/content/versions',
+                {
+                    "title" : "Part Version",
+                    "fields" : [
+                        {
+                            "name": "id",
+                            "label": "ID",
+                            "editable": false,
+                        },
+                        {
+                            "name" : "name",
+                            "label" : "Name",
+                            "editable" : true,
+                        },
+                        {
+                            "name": "major",
+                            "label": "Major Version",
+                            "editable": true,
+                        },
+                        {
+                            "name": "revision",
+                            "label": "Revision",
+                            "editable": true,
+                        },
+                        {
+                            "name": "statusId",
+                            "label": "Status",
+                            "editable": true,
+                            "choice": this.statusList,
+                        },
+                        {
+                            "name": "partId",
+                            "label": "Part ID",
+                            "editable": false,
+                            "hidden": true,
+                        }
+
+                    ]
+                },
+                defaults, 
+                null
+            );
 
         } else {
-            this.partSelected = {
-                'id' : null,
-                'ipn' : '',
-                'description' : '',
-                'categoryId' : '1'
-            };      
-
-            this.partVersions = null;
-            this.partVersionEdit = null;
+            this.versions.setDefaults(defaults);
         }
 
-        this.partLoading = false;
+        await this.versions.loadFiltered(`partId=${partId}`);
     }
 
-    async partSubmit(action) {
-
-        var uri = this.partURI;
-        var method = 'POST'; // create
-
-        switch (action) {
-            case 'reset': {
-                this.selectPart(null);
-                return;
-            }
-
-            case 'submit': {
-                if (this.partSelected.id) {
-                    uri += `/${this.partSelected.id}`;
-                    method = 'PUT'; // Update
-                }
-                break;
-            }
-
-            default: // CREATE: do nothing by default
-                return;
-        }
-
-        const response = await fetch(uri, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-
-            body: JSON.stringify(this.partSelected)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} - ${await response.text()}`);
-        }
-
-        this.partSelected = await response.json();
-        this.partList = await this.getParts();
-        this.partVersions = null;
-        this.partVersionEdit = null;
-
-    }
-
-    async deletePartItem(id) {
-
-        var uri = this.partURI + `/${id}`;
-
-        const response = await fetch(uri, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} - ${await response.text()}`);
-        }
-
-        this.selectPart(null);
-        this.partList = await this.getParts();
-        this.partVersions = null;
-        this.partVersionEdit = null;
-
-    }
-
+    /**
     async versionSubmit(action) {
         var uri = this.versionsURI;
         var method = 'POST'; // create
@@ -255,55 +221,5 @@ class Parts {
         this.partVersions = await this.getVersions(this.partSelected.id);
         this.partVersionEdit = null;        
     }
-
-    async deleteVersion(id) {
-
-        var uri = this.versionsURI + `/${id}`;
-
-        const response = await fetch(uri, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} - ${await response.text()}`);
-        }
-
-        this.partVersions = await this.getVersions(this.partSelected.id);
-        this.partVersionEdit = null;
-    }
-
-    async selectVersion(id) {
-
-        var uri = this.versionsURI + `/${id}`;
-
-        const response = await fetch(uri, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} - ${await response.text()}`);
-        }
-        
-        var nextMajor = 0;
-        var nextRevision = 0;
-
-        for (var row in this.partVersions) {
-            if (this.partVersions[row].major > nextMajor) {
-                nextMajor = this.partVersions[row].major;
-            }
-            if (this.partVersions[row].revision > nextRevision) {
-                nextRevision = this.partVersions[row].revision;
-            }
-        }
-
-        this.partVersionEdit = await response.json();
-    }
+    */
 }
