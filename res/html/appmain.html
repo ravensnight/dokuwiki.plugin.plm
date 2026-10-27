@@ -3,8 +3,8 @@
         <nav class="navigation" >
             <button :class="{ 'selected' : view == 'products' }" @click="loadView('products')">Products</button>
             <button :class="{ 'selected' : view == 'parts' }" @click="loadView('parts')">Parts</button>
-            <button :class="{ 'selected' : view == 'versions' }" x-show="false" @click="loadView('versions')">Versions</button>
-            <button :class="{ 'selected' : view == 'bom' }" @click="loadView('bom')">BOM</button>
+            <button :class="{ 'selected' : view == 'bom' }" >BOM*</button>
+            <button :class="{ 'selected' : view == 'details' }" >Part Details*</button>
             <button :class="{ 'selected' : view == 'companies' }" @click="loadView('companies')">Companies</button>
             <button :class="{ 'selected' : view == 'masterdata' }" @click="loadView('masterdata')">Master Data</button>
         </nav>
@@ -17,7 +17,7 @@
         </template>
 
         <template x-if="!loading" >
-            <div x-ref="viewContainer" x-html="html"></div>
+            <div x-data="control" x-html="html"></div>
         </template>
         
         <template x-if="!loading && !html" >

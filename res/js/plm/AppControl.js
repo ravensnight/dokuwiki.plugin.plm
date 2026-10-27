@@ -19,7 +19,7 @@ class AppControl extends Page {
     }
 
     /** Load  */
-    async loadView(view) {
+    async loadView(view, context) {
 
         this.loading = true;
         try {
@@ -27,17 +27,13 @@ class AppControl extends Page {
             this.view = view;
 
             // create the controller
-
-            console.log("Load control: " + view);
-            this.control = await this.getViewControl(view);            
+            this.control = await this.getViewControl(view, context);            
 
             // Wait for the HTML to load
-            console.log("Load html: " + view);
             this.html = await this.loadHtml(view);
             
             // initialize the control.
             if ('setup' in this.control && typeof this.control.setup === 'function') {
-                console.log("Call setup: " + view);
                 await this.control.setup();
             } 
 
@@ -50,19 +46,19 @@ class AppControl extends Page {
         }
     }
 
-    async getViewControl(view) {
+    async getViewControl(view, context) {
         var res = null;
         switch (view) {
             case 'parts':
                 res = new Parts();
                 break;
 
-            case 'versions':
-                res = new Versions();
+            case 'details':
+                res = new PartDetails(context);
                 break;
 
             case 'products':
-                res = new Products();
+                res = new Products(this);
                 break;
 
             case 'masterdata':
@@ -71,6 +67,10 @@ class AppControl extends Page {
 
             case 'companies':
                 res = new Companies();
+                break;
+
+            case 'bom' :
+                res = new BOMControl(context);
                 break;
 
             default:

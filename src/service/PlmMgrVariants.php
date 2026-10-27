@@ -64,13 +64,12 @@ class PlmMgrVariants extends PlmMgrBase {
      */
     private function createVariantData($v): array
     {
-        $db = PlmDB::get();
-
         return [
             "id" => $v->pk,
             "name" => $v->name,
             "description" => $v->description,
-            "productId" => $v->productId
+            "productId" => $v->productId,
+            "partVersionId" => $v->partVersionId
         ];
     }
 
@@ -125,6 +124,10 @@ class PlmMgrVariants extends PlmMgrBase {
             $v->description = $inputData['description'];
         }
 
+        if (isset($inputData['partVersionId'])) {
+            $v->partVersionId = $inputData['partVersionId'];
+        }
+
         // Save the updated version
         $v->save($db);
 
@@ -148,8 +151,9 @@ class PlmMgrVariants extends PlmMgrBase {
         }
 
         $desc = isset($inputData['description']) ? $inputData['description'] : '';
+        $part = isset($inputData['partVersionId']) ? $inputData['partVersionId'] : null;
 
-        $variant = ProductVariant::createNew($product, $name, $desc);
+        $variant = ProductVariant::createNew($product, $name, $desc, $part);
         $variant->save($db);
 
         return $this->createVariantData($variant);

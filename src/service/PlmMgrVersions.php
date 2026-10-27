@@ -12,7 +12,6 @@ class PlmMgrVersions extends PlmMgrBase {
             $partId = PlmMgrBase::partId($params);
 
             if ($partId === null) {
-                throw new Exception(json_encode($params));
                 return $this->getAll($db);
             }
             else {

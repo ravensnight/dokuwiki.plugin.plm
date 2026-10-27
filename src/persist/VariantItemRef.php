@@ -35,6 +35,24 @@ class VariantItemRef extends DbObject {
         return null;
     }
 
+    public static function entries(PlmDB $db): ?array
+    {
+        /** @var string */
+        $q = "SELECT * FROM  plm_product_variant_item";
+        $result = $db->fetchAll($q);
+
+        if ($result) {
+            $res = [];
+            foreach ($result as $row) {
+                $res[] = new self($row);
+            }
+
+            return $res;
+        }
+
+        return null;
+    }
+
     public static function byProductVariantId(PlmDB $db, int $productVariantId): ?array
     {
         /** @var string */

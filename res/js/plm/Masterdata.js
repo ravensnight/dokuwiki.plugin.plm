@@ -55,10 +55,10 @@ class Masterdata {
             '/doku.php?plm=/api/v1/content/categories',
             {
                 'title' : "Category",
+                'features': {},
                 'fields' : fieldList
             },
-            defaults, 
-            null
+            defaults
         );
 
         await this.categories.loadItems();
@@ -68,10 +68,10 @@ class Masterdata {
             '/doku.php?plm=/api/v1/content/status',
             {
                 'title': "Status",
+                'features': {},
                 'fields': fieldList
             },
-            defaults,
-            null
+            defaults
         );
 
         await this.status.loadItems();
@@ -81,10 +81,10 @@ class Masterdata {
             '/doku.php?plm=/api/v1/content/companytypes',
             {
                 'title': "Company Type",
+                'features': {},
                 'fields': fieldList
             },
-            defaults,
-            null
+            defaults
         );
 
         await this.companyTypes.loadItems();

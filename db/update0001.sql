@@ -225,11 +225,17 @@ CREATE TABLE plm_product_variant (
     variant_id  TEXT NOT NULL UNIQUE,
     product_id  INTEGER NOT NULL,
     description TEXT,
+    part_version_id INTEGER,
 
     FOREIGN KEY (product_id)
         REFERENCES plm_product(id)
         ON UPDATE CASCADE
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (part_version_id)
+        REFERENCES plm_part_version(id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
 );
 
 

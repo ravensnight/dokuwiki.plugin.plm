@@ -12,12 +12,12 @@ class Companies {
         }
 
         const companyTypes = await types.json();
-        console.log("Company types: " + JSON.stringify(companyTypes));
 
         this.companies = new ItemContainer(
             '/doku.php?plm=/api/v1/content/companies',
             {
                 'title': 'Company',
+                'features' : { 'create' : {}, 'edit' : {}, 'delete' : {}},
                 'fields': [
                     {
                         'name': 'id',
@@ -47,8 +47,7 @@ class Companies {
                 "name" : '',
                 "description" : '',
                 "typeId": companyTypes[0].id
-            },
-            null
+            }
         );
 
         await this.companies.loadItems();

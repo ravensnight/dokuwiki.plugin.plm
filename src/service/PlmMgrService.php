@@ -23,39 +23,43 @@ class PlmMgrService {
     }
 
     private function getSubService(string $name) : PlmMgrBase {
-        if (!isset($registry[$name])) {
+        if (!isset($this->registry[$name])) {
 
             switch ($name) {
                 case 'parts':
-                    $registry[$name] = new PlmMgrParts();
+                    $this->registry[$name] = new PlmMgrParts();
                     break;
 
                 case 'versions':
-                    $registry[$name] = new PlmMgrVersions();
+                    $this->registry[$name] = new PlmMgrVersions();
                     break;
 
                 case 'products':
-                    $registry[$name] = new PlmMgrProducts();
+                    $this->registry[$name] = new PlmMgrProducts();
                     break;
 
                 case 'variants':
-                    $registry[$name] = new PlmMgrVariants();
+                    $this->registry[$name] = new PlmMgrVariants();
                     break;
 
                 case 'companies':
-                    $registry[$name] = new PlmMgrCompanies();
+                    $this->registry[$name] = new PlmMgrCompanies();
                     break;
 
                 case 'status':
-                    $registry[$name] = new PlmMgrStatus();
+                    $this->registry[$name] = new PlmMgrStatus();
                     break;
 
                 case 'companytypes':
-                    $registry[$name] = new PlmMgrCompanyTypes();
+                    $this->registry[$name] = new PlmMgrCompanyTypes();
                     break;
 
                 case 'categories':
-                    $registry[$name] = new PlmMgrCategories();
+                    $this->registry[$name] = new PlmMgrCategories();
+                    break;
+
+                case 'variantitems':
+                    $this->registry[$name] = new PlmMgrVariantItems();
                     break;
 
                 default:
@@ -63,7 +67,7 @@ class PlmMgrService {
             }
         }
 
-        return $registry[$name];
+        return $this->registry[$name];
     }
 
     /**

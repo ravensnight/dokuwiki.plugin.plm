@@ -1,35 +1,34 @@
-class ItemContainer {
+/**
+ * ItemContainer class implementing PageFragment interface
+ * Manages container for PLM items with CRUD operations
+ */
+class ItemContainer extends PageFragment {
 
-    constructor(uri, metadata, defaults = null, cbSelect = null) {
+    constructor(uri, metadata, defaultData = null, cbSelect = null) {
+
+        super('/doku.php?plm=/api/v1/pages/ItemContainer');
+
         this.baseUri = uri;
-        this.cbSelect = cbSelect;
-        this.metadata = metadata;        
-        this.filter = null;
-        this.current = null;
-        this.selectedId = null;
-        this.items = null;
+        this.metadata = metadata;
 
-        this.setDefaults(defaults);
-    }
-
-    async html() {
-
-        console.log("Fetch html.");
-
-        const response = await fetch(
-            `/doku.php?plm=/api/v1/pages/ItemContainer`
-        );
-
-        if (!response.ok) {
-            throw new Exception(`Failed to load view: ${response.status} - ${response.text()}`);
+        if (this.metadata['features'] == null) {
+            this.metadata['features'] = {  
+                'create' : true,
+                'edit' : true, 
+                'delete' : true 
+            };
         }
 
-        console.log("Done Fetch html.");
-        return await response.text();
+        this.filter = null;
+        this.current = null;
+        this.editing = false;
+        this.items = null;
+
+        this.setDefaults(defaultData);
     }
 
-    setDefaults(defaults) {
-        this.defaults = (defaults == null ? '{}' : JSON.stringify(defaults));        
+    setDefaults(defaultData) {
+        this.defaultData = (defaultData) ? JSON.stringify(defaultData) : null;
     }
 
     async loadFiltered(filter) {
@@ -37,7 +36,7 @@ class ItemContainer {
 
         this.filter = filter;
         this.current = null;
-        this.selectedId = null;
+        this.editing = null;
 
         await this.loadItems(true);
     }
@@ -53,7 +52,6 @@ class ItemContainer {
                 throw new Error(`Failed to load item list: ${response.status} - ${response.text}`);
             }
 
-            console.log("Update items.");
             this.items = await response.json();
         }
     }
@@ -65,11 +63,11 @@ class ItemContainer {
             throw new Error(`Failed to load item data: : ${resp.status} - ${resp.text}`)
         }
 
-        return await resp.json();                
+        return await resp.json();
     }
 
     async save() {
-        if (this.current == null) return;
+        if (!this.current || !this.editing) return;
 
         // settings for create
         var method = 'POST'
@@ -111,49 +109,86 @@ class ItemContainer {
 
             return found.name;
         }
-        else {
-            return value;
+        else if (field['value'] != null) {
+            var callback = field['value'];
+            var res = callback(item);
+            
+            return res;
         }
+        else {
+            return value;            
+        }
+    }
+
+    async callback(feature, value) {
+        var f = this.metadata.features[feature];
+        if (!f) return;
+
+        var cb = f['callback'];
+        if (!cb) return;
+
+        cb(value);
     }
 
     async doDelete(itemId) {
-        if (itemId == null) return;
 
-        var uri = `${this.baseUri}/${itemId}`;
-        const response = await fetch(uri, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-        });
+        if (!itemId || !this.metadata.features['delete']) return;
 
-        if (!response.ok) {
-            throw new Error(`Deletion request failed: ${response.status} - ${await response.text()}`);
+        cb = this.metadata.features.delete['callback'];
+        if (cb) {
+            cb(itemId);
+            return;
+        } 
+        else {
+            var uri = `${this.baseUri}/${itemId}`;
+            const response = await fetch(uri, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Deletion request failed: ${response.status} - ${await response.text()}`);
+            }
+
+            await this.loadItems(true);
         }
-        
-        await this.loadItems(true);        
     }
 
     async doSelect(itemId) {
+        this.editing = false;
 
-        this.selectedId = itemId;                
-        this.current = null;
+        if (this.metadata.features['select'] && itemId) {
+            this.current = await this.load(itemId);
+        } else {
+            this.current = null;
+        }
 
-        if (itemId == null || this.cbSelect == null) return;
-        this.cbSelect(itemId);
+        this.callback('select', itemId);
     }
 
     async doEdit(itemId) {
-        this.selectedId = itemId;
-        if (this.cbSelect) {
-            this.cbSelect(null);
-        }
+
+        this.callback('select', null);
 
         if (itemId == null) {
-            this.current = JSON.parse(this.defaults);
+            if (this.metadata.features['create']) {
+                this.current = JSON.parse(this.defaultData);
+                this.editing = true;
+            } else {
+                this.current = null;
+                this.editing = false;
+            }
         } else {
-            this.current = await this.load(itemId);
+            if (this.metadata.features['edit']) {
+                this.current = await this.load(itemId);
+                this.editing = true;
+            } else {
+                this.current = null;
+                this.editing = false;
+            }
         }
     }
 

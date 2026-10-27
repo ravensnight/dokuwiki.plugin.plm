@@ -30,6 +30,10 @@ class Parts {
             '/doku.php?plm=/api/v1/content/parts',
             {
                 "title": "Part",
+                'features': {
+                    'create': {}, 'edit': {}, 'delete': {},
+                    'select': { 'callback': (partId) => this.selectPart(partId) }
+                },
                 "fields" : [
                     {
                         'name': 'id',
@@ -60,8 +64,7 @@ class Parts {
                 "ipn" : '',
                 "description" : '',
                 "categoryId": this.categories[0].id
-            },
-            (partId) => this.selectPart(partId)
+            }
         )
 
         await this.parts.loadItems();
@@ -90,6 +93,7 @@ class Parts {
                 '/doku.php?plm=/api/v1/content/versions',
                 {
                     "title" : "Part Version",
+                    "features" : { 'create' : {}, 'edit' : {}, 'delete' : {}},
                     "fields" : [
                         {
                             "name": "id",
@@ -126,8 +130,7 @@ class Parts {
 
                     ]
                 },
-                defaults, 
-                null
+                defaults
             );
 
         } else {
@@ -136,90 +139,4 @@ class Parts {
 
         await this.versions.loadFiltered(`partId=${partId}`);
     }
-
-    /**
-    async versionSubmit(action) {
-        var uri = this.versionsURI;
-        var method = 'POST'; // create
-
-        var ver = null;
-
-        switch (action) {
-            case 'submit': 
-                method = 'PUT'
-                ver = this.partVersionEdit;
-                uri = this.versionsURI + `/${ver.id}`;
-                break;
-
-            case 'nextRevision': {
-                var maxRevision = 1;
-                for (var r in this.partVersions) {
-                    if (r.major == this.partVersionEdit.major) {
-                        if (r.revision > maxRevision) {
-                            maxRevision = r.revision;
-                        }
-                    }
-                }
-
-                var ver = {
-                    "partId": this.partSelected.id,
-                    "major": this.partVersionEdit.major,
-                    "revision": maxRevision + 1,
-                    "statusId": this.statusList[0].id
-                }
-
-                break;
-
-            }
-
-            case 'nextMajor': {
-                var naxMajor = 1;
-                for (var r in this.partVersions) {
-                    if (r.major > naxMajor) {
-                        naxMajor = r.major;
-                    }
-                }
-
-                var ver = {
-                    "partId": this.partSelected.id,
-                    "major": naxMajor + 1,
-                    "revision": 1,
-                    "statusId": this.statusList[0].id
-                }
-
-                break;
-            }
-
-            case 'createDefault': {
-                var ver = {
-                    "partId": this.partSelected.id,
-                    "major": 1,
-                    "revision": 1,
-                    "statusId": this.statusList[0].id
-                }
-                break;
-            }
-
-            default: // do nothing by default
-                return;
-        }
-
-        const response = await fetch(uri, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-
-            body: JSON.stringify(ver)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} - ${await response.text()}`);
-        }
-
-        this.partVersions = await this.getVersions(this.partSelected.id);
-        this.partVersionEdit = null;        
-    }
-    */
 }

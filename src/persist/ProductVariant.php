@@ -5,21 +5,24 @@ class ProductVariant extends DbObject {
     public int $productId;
     public string $name;
     public ?string $description = null;
+    public ?int $partVersionId = null;
 
     protected function assign(array $fields) {
         $this->name = $fields['variant_id'];
         $this->productId = $fields['product_id'];
         $this->description = $fields['description'];
+        $this->partVersionId = $fields['part_version_id'];
     }
 
     /**
      * Create new instance
      */
-    public static function createNew(Product $product, string $name, ?string $description) : self {
+    public static function createNew(Product $product, string $name, ?string $description, ?int $partVersionId = null) : self {
         return new self([
             'variant_id' => $name,
             'product_id' => $product->pk,
-            'description' => $description
+            'description' => $description,
+            'part_version_id' => $partVersionId
         ]);
     }
 
@@ -104,11 +107,11 @@ class ProductVariant extends DbObject {
     }
 
     /**
-     * @return VariantItemRef[]
+     * Get the releated product
      */
-    public function fetchChildren(PlmDB $db): ?array
+    public function fetchPartVersion(PlmDB $db): ?Product
     {
-        return VariantItemRef::byProductVariantId($db, $this->pk);
+        return PartVersion::byPK($db, $this->partVersionId);
     }
 
     /**
@@ -117,22 +120,24 @@ class ProductVariant extends DbObject {
     public function save(PlmDB $db): void
     {
         if (empty($this->pk)) {
-            $q = "INSERT INTO plm_product_variant (variant_id, product_id, description) VALUES (:variant_id, :product_id, :description)";
+            $q = "INSERT INTO plm_product_variant (variant_id, product_id, description, part_version_id) VALUES (:variant_id, :product_id, :description, :part_version_id)";
             $db->querySingle($q, [
                 'variant_id' => $this->name,
                 'product_id' => $this->productId,
-                'description' => $this->description
+                'description' => $this->description,
+                'part_version_id' => $this->partVersionId
             ]);
 
             $this->pk = $db->lastInsertedId('plm_product_variant');
 
         } else {
-            $q = "UPDATE plm_product_variant SET variant_id = :variant_id, product_id = :product_id, description = :description WHERE id = :pk";
+            $q = "UPDATE plm_product_variant SET variant_id = :variant_id, product_id = :product_id, description = :description, part_version_id = :part_version_id WHERE id = :pk";
             $db->querySingle($q, [
                 'pk' => $this->pk,
                 'variant_id' => $this->name,
                 'product_id' => $this->productId,
-                'description' => $this->description
+                'description' => $this->description,
+                'part_version_id' => $this->partVersionId
             ]);
         }
     }

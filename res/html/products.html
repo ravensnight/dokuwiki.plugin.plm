@@ -1,4 +1,4 @@
-<div x-data="control" class="plm-module">
+<div class="plm-module">
     <h2>Product Management</h2>
 
     <template x-if="products" >
@@ -8,4 +8,12 @@
     <template x-if="variants">
         <section x-data="variants" x-html="html()"></section>
     </template>    
+
+    <template x-if="variantParts">
+        <section x-data="variantParts" x-html="html()"></section>
+    </template>
+    
+    <template x-if="partSelect" >
+        <section x-data="partSelect" x-html="html()"></section>
+    </template>
 </div>

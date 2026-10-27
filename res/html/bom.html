@@ -1,0 +1,48 @@
+<div class="plm-module" >
+    <h2>BOM Hierarchy Editor</h2>
+
+    <template x-if="variant" >
+        <section>
+            <h3>Variant Details</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Product ID</th>
+                        <th>Product Name</th>
+                        <th>Product Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="product" >
+                        <tr>
+                            <td x-text="variant.id"></td>
+                            <td x-text="variant.name"></td>
+                            <td x-text="variant.description"></td>
+                            <td x-text="variant.productId"></td>
+                            <td x-text="product.name"></td>
+                            <td x-text="product.description"></td>
+                        </tr>                        
+                    </template>
+                    <template x-if="!product">
+                        <tr>
+                            <td x-text="variant.id"></td>
+                            <td x-text="variant.name"></td>
+                            <td x-text="variant.description"></td>
+                            <td x-text="variant.productId"></td>
+                            <td>n/a</td>
+                            <td>n/a</td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </section>
+    </template>
+
+    <template x-if="variantParts">
+        <section x-data="variantParts" x-html="html()"></section>
+    </template>
+</div>
