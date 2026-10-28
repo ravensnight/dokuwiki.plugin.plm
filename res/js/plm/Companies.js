@@ -17,7 +17,7 @@ class Companies {
             '/doku.php?plm=/api/v1/content/companies',
             {
                 'title': 'Company',
-                'features' : { 'create' : {}, 'edit' : {}, 'delete' : {}},
+                'features' : null,
                 'fields': [
                     {
                         'name': 'id',

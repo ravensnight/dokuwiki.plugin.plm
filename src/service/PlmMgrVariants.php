@@ -64,12 +64,19 @@ class PlmMgrVariants extends PlmMgrBase {
      */
     private function createVariantData($v): array
     {
+        /** @var PlmDB */
+        $db = PlmDB::get();
+
+        /** @var PartVersion */
+        $pv = $v->fetchPartVersion($db);
+
         return [
             "id" => $v->pk,
             "name" => $v->name,
             "description" => $v->description,
             "productId" => $v->productId,
-            "partVersionId" => $v->partVersionId
+            "partVersionId" => $v->partVersionId,
+            "partVersionName" => $pv === null ? 'n/a' : $pv->name
         ];
     }
 
@@ -91,7 +98,7 @@ class PlmMgrVariants extends PlmMgrBase {
     }
 
     #[Override]
-    public function update(array $inputData): array
+    public function update(array $inputData, ?array $attrNames): array
     {
         $db = PlmDB::get();
 

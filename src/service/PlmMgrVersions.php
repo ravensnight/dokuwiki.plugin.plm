@@ -69,11 +69,13 @@ class PlmMgrVersions extends PlmMgrBase {
 
         return [
             "id" => $v->pk,
-            "partId" => $v->partId,
             "name" => $v->name,
             "major" => $v->major,
             "revision" => $v->revision,
-            "statusId" => $v->statusId
+            "statusId" => $v->statusId,
+            "partId" => $v->partId,
+            "partIPN" => $p->ipn,
+            "partDescription" => $p->description,
         ];
     }
 
@@ -95,7 +97,7 @@ class PlmMgrVersions extends PlmMgrBase {
     }
 
     #[Override]
-    public function update(array $inputData): array
+    public function update(array $inputData, ?array $attrNames): array
     {
         $db = PlmDB::get();
 

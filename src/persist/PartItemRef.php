@@ -172,4 +172,71 @@ class PartItemRef extends DbObject {
         $q = "DELETE FROM plm_part_item WHERE id = :id";
         $db->querySingle($q, ['id' => $this->pk]);
     }
+
+    /** 
+     * Check, if there is a given child assigned to parent 
+     */
+    public static function hasChild(PlmDB $db, int $parent, int $child) {
+        $q = "SELECT count(*) FROM plm_part_item WHERE parent_version_id = :parent AND child_version_id = :child";
+        $result = $db->querySingle($q, [
+            "parent" => $parent,
+            "child" => $child
+        ]);
+
+        return $result[0] > 0;
+    }
+
+    /**
+     * Get all ancestors of a given child ID (recursive)
+     * This finds all parents (direct and indirect) of a specific child version ID
+     * 
+     * @param PlmDB $db
+     * @param int $childId
+     * @return PartItemRef[]
+     */
+    public static function getAncestors(PlmDB $db, int $childId): ?array
+    {
+        /** @var string */
+        $q = "
+            WITH RECURSIVE_PARENT AS (
+                SELECT 
+                    parent_version_id, 
+                    child_version_id,
+                    0 as depth,
+                    CAST(child_version_id AS TEXT) as path
+                FROM plm_part_item 
+                WHERE child_version_id = :child_id
+                
+                UNION ALL
+                
+                SELECT 
+                    p.parent_version_id,
+                    p.child_version_id,
+                    r.depth + 1,
+                    r.path || ',' || p.child_version_id
+                FROM plm_part_item p
+                JOIN RECURSIVE_PARENT r ON p.child_version_id = r.parent_version_id
+                WHERE r.path NOT LIKE '%' || p.child_version_id || '%'
+                AND r.depth < 10
+            )
+
+            SELECT DISTINCT parent_version_id, child_version_id, depth
+            FROM RECURSIVE_PARENT
+            ORDER BY depth;
+        ";
+
+        $result = $db->fetchAll($q, [
+            'child_id' => $childId
+        ]);
+
+        if ($result) {
+            $res = [];
+            foreach ($result as $row) {
+                $res[] = $row['parent_version_id'];
+            }            
+            return $res;
+        }
+
+        return null;
+    }
 }

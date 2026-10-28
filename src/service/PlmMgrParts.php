@@ -88,7 +88,7 @@ class PlmMgrParts extends PlmMgrBase
      * @return array
      */
     #[Override]
-    public function update(array $data): array
+    public function update(array $data, ?array $attrNames): array
     {
         $db = PlmDB::get();
 

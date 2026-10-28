@@ -7,12 +7,13 @@ abstract class DbEnum extends DbObject {
     public int $sort_order = 0;
     public bool $active = true;
 
-    public static function fetchName(PlmDB $db, int $pk): string {
+    protected abstract static function getTableName() : string;
+
+    public static function fetchName(PlmDB $db, int $pk): string
+    {
         $obj = static::byPK($db, $pk);
         return $obj ? $obj->name : 'N/A';
     }
-
-    protected abstract static function getTableName() : string;
 
     public function assign(array $fields)
     {

@@ -38,8 +38,8 @@ require_once(__DIR__ . '/src/service/PlmMgrCompanies.php');
 require_once(__DIR__ . '/src/service/PlmMgrCompanyTypes.php');
 require_once(__DIR__ . '/src/service/PlmMgrCategories.php');
 require_once(__DIR__ . '/src/service/PlmMgrVariants.php');
-require_once(__DIR__ . '/src/service/PlmMgrVariantItems.php');
 require_once(__DIR__ . '/src/service/PlmMgrStatus.php');
+require_once(__DIR__ . '/src/service/PlmMgrBOM.php');
 require_once(__DIR__ . '/src/service/PlmMgrService.php');
 
 // 4. API Layer (Depends on Persistence)

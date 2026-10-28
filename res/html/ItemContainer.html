@@ -1,4 +1,6 @@
-<h3 x-text="`${metadata.title} Overview`"></h3>
+<template x-if="metadata.title" >
+    <h3 x-text="`${metadata.title}`"></h3>
+</template>
 
 <!-- Table -->
 <template x-if="items">
@@ -18,21 +20,21 @@
                 <template x-for="f in metadata.fields" :key="f.name">
                     <template x-if="!f.hidden">
                         <td :class="f.name">
-                            <template x-if="metadata.features.select && f.select">
-                                <a href="#" @click.prevent="doSelect(i[f.select])" x-text="resolve(i, f)"></a>
+                            <template x-if="metadata.features['select'] && f.select">
+                                <a href="#" @click.prevent="doSelect(i, f.name)" x-text="resolve(i, f)"></a>
                             </template>
-                            <template x-if="!metadata.features.select || !f.select">
+                            <template x-if="!metadata.features['select'] || !f.select">
                                 <span x-text="resolve(i, f)"></span>
                             </template>
                         </td>
                     </template>
                 </template>
                 <td class="action">
-                    <template x-if="metadata.features.edit" >
+                    <template x-if="metadata.features['edit']" >
                         <a href="#" @click.prevent="doEdit(i.id)"><i class="fa fa-pencil-square-o"></i></a>
                     </template>
 
-                    <template x-if="metadata.features.delete">
+                    <template x-if="metadata.features['delete']">
                         <a href="#" @click.prevent="doDelete(i.id)"><i class="fa fa-remove"></i></a>
                     </template>
                 </td>

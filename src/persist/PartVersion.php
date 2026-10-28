@@ -88,6 +88,37 @@ class PartVersion extends DbObject {
     }
 
     /**
+     * @return PartVersion[]
+     */
+    public static function fetchAllExcept(PlmDB $db, ?array $keys): ?array
+    {
+
+        if ($keys === null || empty($keys)) {
+            return static::entries($db);
+        }
+
+        // Create parameter placeholders for the IN clause
+        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+        $query = "SELECT * FROM plm_part_version WHERE id NOT IN ($placeholders)";
+
+        $result = $db->fetchAll($query, $keys);
+
+        if ($result) {
+            $res = [];
+            foreach ($result as $row) {
+                $res[] = new PartVersion($row);
+            }
+            return $res;
+        }
+
+        return null;
+    }
+
+    public function isChildOf(PlmDB $db, int $parent) {
+        return PartItemRef::hasChild($db, $parent, $this->pk);
+    }
+
+    /**
      * @return PartItemRef[]
      */
     public function fetchChildren(PlmDB $db) : ?array {

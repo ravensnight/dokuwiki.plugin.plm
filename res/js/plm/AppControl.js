@@ -50,11 +50,11 @@ class AppControl extends Page {
         var res = null;
         switch (view) {
             case 'parts':
-                res = new Parts();
+                res = new Parts(this);
                 break;
 
             case 'details':
-                res = new PartDetails(context);
+                res = new PartDetails(this, context);
                 break;
 
             case 'products':

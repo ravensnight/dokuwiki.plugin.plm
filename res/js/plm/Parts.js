@@ -1,10 +1,12 @@
 class Parts {
 
-    constructor() {
+    constructor(appControl) {
+        this.appControl = appControl;
         this.categories = null;
         this.statusList = null;
         this.parts = null;
         this.versions = null;
+        this.childList = null;
     }
 
     async setup() {
@@ -29,10 +31,10 @@ class Parts {
         this.parts = new ItemContainer(
             '/doku.php?plm=/api/v1/content/parts',
             {
-                "title": "Part",
+                "title": "Part Overview",
                 'features': {
                     'create': {}, 'edit': {}, 'delete': {},
-                    'select': { 'callback': (partId) => this.selectPart(partId) }
+                    'select': { 'callback': (part, field) => this.selectPart(part, field) }
                 },
                 "fields" : [
                     {
@@ -44,7 +46,7 @@ class Parts {
                         'name': 'ipn',
                         'label': 'IPN',
                         'editable': true,
-                        'select': 'id'
+                        'select': true
                     },
                     {
                         'name': 'description',
@@ -70,13 +72,16 @@ class Parts {
         await this.parts.loadItems();
     }
 
-    async selectPart(partId) {
+    async selectPart(part, field) {
 
-        if (!partId) {
+        this.versionSelect(null, null);
+
+        if (!part) {
             this.versions = null;
             return;
         }
 
+        /** Part version defaults */
         const defaults = {
             "id" : null,
             "name" : '',
@@ -84,7 +89,7 @@ class Parts {
             "major" : 1,
             "revision" : 1,
             "statusId": this.statusList[0].id,
-            "partId" : partId
+            "partId" : part.id
         };
 
         if (this.versions == null) {
@@ -92,8 +97,11 @@ class Parts {
             this.versions = new ItemContainer(
                 '/doku.php?plm=/api/v1/content/versions',
                 {
-                    "title" : "Part Version",
-                    "features" : { 'create' : {}, 'edit' : {}, 'delete' : {}},
+                    "title" : "Part Versions",
+                    "features" : { 
+                        'create' : {}, 'edit' : {}, 'delete' : {},
+                        'select' : { 'callback' : (item, field) => this.versionSelect(item, field) }
+                    },
                     "fields" : [
                         {
                             "name": "id",
@@ -104,6 +112,7 @@ class Parts {
                             "name" : "name",
                             "label" : "Name",
                             "editable" : true,
+                            'select' : true
                         },
                         {
                             "name": "major",
@@ -127,7 +136,6 @@ class Parts {
                             "editable": false,
                             "hidden": true,
                         }
-
                     ]
                 },
                 defaults
@@ -137,6 +145,13 @@ class Parts {
             this.versions.setDefaults(defaults);
         }
 
-        await this.versions.loadFiltered(`partId=${partId}`);
+        await this.versions.loadFiltered(`partId=${part.id}`);
     }
+
+    async versionSelect(item, field) {
+        if ((item !== null) && (field === 'name')) {
+            this.appControl.loadView('details', item);
+        }
+    } 
+
 }

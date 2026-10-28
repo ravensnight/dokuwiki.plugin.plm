@@ -8,10 +8,64 @@ class Masterdata {
 
     async setup() {
 
-        const activityStatus = [
-            { 'id': false, 'name': 'Inactive', 'description': "Inactive" },
-            { 'id': true, 'name': 'Active', 'description': "Active" }
+        const yesNo = [
+            { 'id': 0, 'name': 'No', 'description': "No/False" },
+            { 'id': 1, 'name': 'Yes', 'description': "Yes/True" }
         ];
+
+        /** Load categories */
+        this.categories = new ItemContainer(
+            '/doku.php?plm=/api/v1/content/categories',
+            {
+                'title' : "Category",
+                'features': { 'create' : {}, 'edit' : {} },
+                'fields' : [
+                    {
+                        'name': 'id',
+                        'label': 'ID',
+                        'editable': false,
+                    },
+                    {
+                        'name': 'name',
+                        'label': 'Name',
+                        'editable': true,
+                    },
+                    {
+                        'name': 'description',
+                        'label': 'Description',
+                        'editable': true,
+                    },
+                    {
+                        'name': 'sortorder',
+                        'label': 'Sort Order',
+                        'editable': true,
+                    },
+                    {
+                        'name': 'active',
+                        'label': 'Activity Status',
+                        'choice': yesNo,
+                        'editable': true,
+                    },              
+                    {
+                        'name': 'composite',
+                        'label': 'Has Children',
+                        'choice': yesNo,
+                        'editable': true,
+                    },              
+                ]
+            },
+            {
+                "id": null,
+                "name": '',
+                "description": '',
+                "sortorder": 0,
+                "active": 0,
+                "composite": 0
+            }
+        );
+
+        await this.categories.loadItems();
+
 
         const fieldList = [
             {
@@ -35,33 +89,20 @@ class Masterdata {
                 'editable': true,
             },
             {
-                'name': 'status',
+                'name': 'active',
                 'label': 'Activity Status',
-                'choice': activityStatus,
+                'choice': yesNo,
                 'editable': true,
             },
         ];
 
         const defaults = {
-            "id" : null,
-            "name" : '',
-            "description" : '',
-            "sortorder" : 0,
-            "status" : 1
+            "id": null,
+            "name": '',
+            "description": '',
+            "sortorder": 0,
+            "active": 1
         }
-
-        /** Load categories */
-        this.categories = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/categories',
-            {
-                'title' : "Category",
-                'features': {},
-                'fields' : fieldList
-            },
-            defaults
-        );
-
-        await this.categories.loadItems();
 
         /** Load status */
         this.status = new ItemContainer(

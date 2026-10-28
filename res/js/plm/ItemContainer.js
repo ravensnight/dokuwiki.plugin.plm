@@ -4,18 +4,18 @@
  */
 class ItemContainer extends PageFragment {
 
-    constructor(uri, metadata, defaultData = null, cbSelect = null) {
+    constructor(uri, metadata, defaultData = null) {
 
         super('/doku.php?plm=/api/v1/pages/ItemContainer');
 
         this.baseUri = uri;
         this.metadata = metadata;
 
-        if (this.metadata['features'] == null) {
-            this.metadata['features'] = {  
-                'create' : true,
-                'edit' : true, 
-                'delete' : true 
+        if (this.metadata['features'] === null) {
+            this.metadata['features'] = {  // NULL assigns the defaults
+                'create' : {},
+                'edit' : {}, 
+                'delete' : {}
             };
         }
 
@@ -120,14 +120,14 @@ class ItemContainer extends PageFragment {
         }
     }
 
-    async callback(feature, value) {
+    async callback(feature, item, field) {
         var f = this.metadata.features[feature];
         if (!f) return;
 
         var cb = f['callback'];
         if (!cb) return;
 
-        cb(value);
+        cb(item, field);
     }
 
     async doDelete(itemId) {
@@ -157,16 +157,25 @@ class ItemContainer extends PageFragment {
         }
     }
 
-    async doSelect(itemId) {
-        this.editing = false;
+    async doSelect(item, field) {
 
-        if (this.metadata.features['select'] && itemId) {
-            this.current = await this.load(itemId);
+        /*
+        if (item) {
+            console.log(`Select called: ${item.id}, ${field}`);
+        } else {
+            console.log(`Select called: NULL, ${field}`);
+        }
+        */
+
+        this.editing = false;
+        
+        if (this.metadata.features['select'] && (item !== null)) {
+            this.current = item;
         } else {
             this.current = null;
         }
 
-        this.callback('select', itemId);
+        this.callback('select', item, field);
     }
 
     async doEdit(itemId) {

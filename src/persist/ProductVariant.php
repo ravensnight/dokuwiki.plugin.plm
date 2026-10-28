@@ -109,7 +109,7 @@ class ProductVariant extends DbObject {
     /**
      * Get the releated product
      */
-    public function fetchPartVersion(PlmDB $db): ?Product
+    public function fetchPartVersion(PlmDB $db): ?PartVersion
     {
         return PartVersion::byPK($db, $this->partVersionId);
     }

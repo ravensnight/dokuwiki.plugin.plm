@@ -82,7 +82,7 @@ class ContentApi extends AbstractApi {
     protected function handleUpdate(array $nodePath, array $params): void
     {
 
-        if (count($nodePath) !== 2) {
+        if (count($nodePath) < 2) {
             $this->terminate(404, "Invalid Content API path: " . implode('/', $nodePath));
             return;
         }
@@ -100,6 +100,13 @@ class ContentApi extends AbstractApi {
             return;
         }
 
+        $attrs = null;
+        if (isset($nodePath[2])) {
+            $attrs = [
+                $nodePath[3]
+            ];
+        }
+
         $json = file_get_contents('php://input');
         $inputData = json_decode($json, true);
 
@@ -109,7 +116,7 @@ class ContentApi extends AbstractApi {
         }
 
         $inputData['id'] = $key;
-        $data = PlmMgrService::get()->update($view, $inputData);
+        $data = PlmMgrService::get()->update($view, $inputData, $attrs);
 
         // write the content
         $this->out->write(json_encode($data));

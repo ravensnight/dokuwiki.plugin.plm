@@ -28,7 +28,7 @@ abstract class PlmMgrBase {
         throw new Exception('Function "create" not implemented.');
     }
 
-    public function update(array $inputData): array {
+    public function update(array $inputData, ?array $attrNames): array {
         throw new Exception('Function "update" not implemented.');
     }
 
@@ -43,7 +43,7 @@ abstract class PlmMgrBase {
             "name" => $entry->name,
             "description" => $entry->description,
             "sortorder" => $entry->sort_order,
-            "status" => $entry->active
+            "active" => ($entry->active ? 1 : 0)
         ];
     }
 

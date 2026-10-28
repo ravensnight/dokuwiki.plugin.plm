@@ -10,11 +10,12 @@ CREATE TABLE plm_categories (
     name        TEXT NOT NULL UNIQUE,
     description TEXT,
     sort_order  INTEGER NOT NULL DEFAULT 0,
-    active      INTEGER NOT NULL DEFAULT 1
+    active      INTEGER NOT NULL DEFAULT 1,
+    isComposite INTEGER NOT NULL DEFAULT 1,
 );
 
 CREATE INDEX idx_plm_categories_active_order ON plm_categories(active, sort_order);
-
+CREATE INDEX idx_plm_categories_composite ON plm_categories(isComposite);
 
 -- ============================================================
 -- 2. Status

@@ -1,24 +1,37 @@
 <div class="plm-module">
-    <h2>Part Details</h2>
+    <h2>Part Version Details</h2>
 
+    <h3>Current Part Version</h3>
+    <template x-if="partVersion" >
     <table>
         <thead>
             <th class="id">ID</th>
             <th class="ipn">IPN</th>
             <th class="name">Name</th>
+            <th class="description">Part Description</th>
             <th class="major">Version</th>
             <th class="revision">Revision</th>
             <th class="status">Status</th>
         </thead>
-        <template x-for="item in control.getVersions()" :key="item.id">
+        <tbody>
             <tr>
-                <td class='id' x-text="item.id"></td>
-                <td class='ipn' x-text="item.ipn"></td>
-                <td class='name' x-text="item.name"></td>
-                <td class='major' x-text="item.major"></td>
-                <td class='revision' x-text="item.revision"></td>
-                <td class='status' x-text="item.statusId"></td>
+                <td class='id' x-text="partVersion.id"></td>
+                <td class='ipn' x-text="partVersion.partIPN"></td>
+                <td class='name' x-text="partVersion.name"></td>
+                <td class='description' x-text="partVersion.partDescription"></td>
+                <td class='major' x-text="partVersion.major"></td>
+                <td class='revision' x-text="partVersion.revision"></td>
+                <td class='status' x-text="getStatusName(partVersion.statusId)"></td>
             </tr>
-        </template>
+        </tbody>
     </table>
+    </template>
+    <template x-if="!partVersion">
+        <p class="warning">No Part Version Selected</p>
+    </template>
+
+    <template x-if="childList">
+        <section x-data="childList" x-html="html()"></section>
+    </template>
+
 </div>

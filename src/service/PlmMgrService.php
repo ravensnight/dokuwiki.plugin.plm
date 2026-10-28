@@ -58,8 +58,8 @@ class PlmMgrService {
                     $this->registry[$name] = new PlmMgrCategories();
                     break;
 
-                case 'variantitems':
-                    $this->registry[$name] = new PlmMgrVariantItems();
+                case 'bom':
+                    $this->registry[$name] = new PlmMgrBOM();
                     break;
 
                 default:
@@ -96,10 +96,10 @@ class PlmMgrService {
 
     }
 
-    public function update(string $view, mixed $inputData) : mixed {
+    public function update(string $view, mixed $inputData, ?array $attrNames) : mixed {
         $subService = $this->getSubService($view);
         if ($subService) {
-            return $subService->update($inputData);
+            return $subService->update($inputData, $attrNames);
         }
 
         throw new Exception('SubService not found: ' . $view);
