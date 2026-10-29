@@ -114,7 +114,7 @@ class PartVersion extends DbObject {
         return null;
     }
 
-    public function isChildOf(PlmDB $db, int $parent) {
+    public function isChildOf(PlmDB $db, int $parent) : bool {
         return PartItemRef::hasChild($db, $parent, $this->pk);
     }
 

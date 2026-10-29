@@ -28,31 +28,31 @@ class PlmMgrBOM extends PlmMgrBase {
         return $result;
     }
 
-    protected function forVersionKey(PlmDB $db, int $key) : ?array {
+    protected function forVersionKey(PlmDB $db, int $parentKey) : ?array {
 
         $db = PlmDB::get();
 
         /** @var PartVersion */
-        $v = PartVersion::byPK($db, $key);
-        if ($v === null) {
+        $parentVersion = PartVersion::byPK($db, $parentKey);
+        if ($parentVersion === null) {
             return null;
         }
 
-        $parents = PartItemRef::getAncestors($db, $key);
+        $parents = PartItemRef::getAncestors($db, $parentVersion->pk);
 
         // add myself to the list of exclusions
         if ($parents !== null) {
-            $parents[] = $key;
+            $parents[] = $parentVersion->pk;
         } else {
-            $parents = [ $key ];
+            $parents = [$parentVersion->pk ];
         }
 
         /** @var PartVersion[] */
-        $children = $v->fetchAllExcept($db, $parents);
+        $children = $parentVersion->fetchAllExcept($db, $parents);
         if ($children !== null) {
             $res = [];
-            foreach ($children as $c) {
-                $res[] = $this->createVersionData($c, $key);
+            foreach ($children as $child) {
+                $res[] = $this->createVersionData($child, $parentVersion->pk);
             }
 
             return $res;
@@ -67,23 +67,58 @@ class PlmMgrBOM extends PlmMgrBase {
      * @param PartVersion $v
      * @return array
      */
-    private function createVersionData(PartVersion $v, ?int $key): array
+    private function createVersionData(PartVersion $childVersion, ?int $parentKey): array
     {
         $db = PlmDB::get();
-        $p = $v->fetchPart($db);
 
-        $isChild = $key === null ? false : $v->isChildOf($db, $key);
-
+        $isChild = PartItemRef::hasChild($db, $parentKey, $childVersion->pk);
+        $part = $childVersion->fetchPart($db);
         return [
-            "id" => $v->pk,
-            "name" => $v->name,
-            "major" => $v->major,
-            "revision" => $v->revision,
-            "statusId" => $v->statusId,
-            "partId" => $v->partId,
-            "partIPN" => $p->ipn,
-            "partDescription" => $p->description,
-            "isChild" => $isChild
+            "id" => $childVersion->pk,
+            "name" => $childVersion->name,
+            "major" => $childVersion->major,
+            "revision" => $childVersion->revision,
+            "statusId" => $childVersion->statusId,
+            "partId" => $childVersion->partId,
+            "partIPN" => $part->ipn,
+            "partDescription" => $part->description,
+            "isChild" => $isChild ? 1 : 0
         ];
+    }    
+
+    #[Override]
+    public function update(array $inputData, ?array $attrNames): array
+    {
+        $id = static::id($inputData);
+        if ($id === null) {
+            throw new Exception("Key/ID mus not be NULL to update a bom element.");
+        }
+
+        if (!isset($inputData['command'])) {
+            throw new Exception("Command is not set for BOM update.");
+        }
+        if (!isset($inputData['childId'])) {
+            throw new Exception("childId is not set for BOM update.");
+        }
+
+        $cmd = $inputData['command'];
+        $cid = $inputData['childId'];
+
+        $db = PlmDB::get();
+
+        switch ($cmd)  {
+            case 'add' :
+                PartItemRef::addChild($db, $id, $cid);
+                break;
+
+            case 'remove' :
+                PartItemRef::removeChild($db, $id, $cid);
+                break;
+
+            default:
+                throw new Exception("Unknown command for BOM update: " . $cmd);
+        }
+
+        return [];
     }    
 }

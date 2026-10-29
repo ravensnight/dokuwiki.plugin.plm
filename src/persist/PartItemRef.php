@@ -95,6 +95,31 @@ class PartItemRef extends DbObject {
         return $items;
     }
 
+    public static function addChild(PlmDB $db, int $parentId, int $childId, ?int $amount = null, ?string $designators = null) {
+        // Check if the pair already exists
+        if (static::hasChild($db, $parentId, $childId)) {
+            return;
+        }
+
+        // Insert a new child entry
+        $q = "INSERT INTO plm_part_item (parent_version_id, child_version_id, quantity, designators) VALUES (:parent, :child, :amount, :designators)";
+        $db->querySingle($q, [
+            'parent' => $parentId,
+            'child' => $childId,
+            'amount' => $amount === null ? 1 : $amount,
+            'designators' => $designators
+        ]);
+    }
+
+    public static function removeChild(PlmDB $db, int $parentId, int $childId) {
+        // Delete the child entry if the pair exists
+        $q = "DELETE FROM plm_part_item WHERE parent_version_id = :parent AND child_version_id = :child";
+        $db->querySingle($q, [
+            'parent' => $parentId,
+            'child' => $childId
+        ]);
+    }
+
     /**
      * @var ProductVariant[]
      */
@@ -127,14 +152,14 @@ class PartItemRef extends DbObject {
      * Returns true, if this version shall be applied to given variant.
      */
     public function appliesToVariant(PlmDB $db, int $variantId) : bool {
-        $q = 'SELECT count(*) FROM plm_part_item_variant WHERE part_item_id = :pk AND variant_id = :variant_id;';
+        $q = 'SELECT count(*) as amount FROM plm_part_item_variant WHERE part_item_id = :pk AND variant_id = :variant_id;';
 
         $result = $db->querySingle($q, [
             'pk' => $this->pk,
             'variant_id' => $variantId
         ]);
 
-        return $result[0] > 0;
+        return $result["amount"] > 0;
     }
 
     /**
@@ -176,14 +201,17 @@ class PartItemRef extends DbObject {
     /** 
      * Check, if there is a given child assigned to parent 
      */
-    public static function hasChild(PlmDB $db, int $parent, int $child) {
-        $q = "SELECT count(*) FROM plm_part_item WHERE parent_version_id = :parent AND child_version_id = :child";
-        $result = $db->querySingle($q, [
-            "parent" => $parent,
-            "child" => $child
-        ]);
+    public static function hasChild(PlmDB $db, int $parent, int $child) : bool {
+        $q = "SELECT count(*) as amount FROM plm_part_item WHERE parent_version_id = :parentId AND child_version_id = :childId";
 
-        return $result[0] > 0;
+        $result = $db->querySingle($q, [
+            "parentId" => $parent,
+            "childId" => $child
+        ]);
+        
+        /** @var bool */
+        $res = ($result["amount"] > 0);
+        return $res;
     }
 
     /**

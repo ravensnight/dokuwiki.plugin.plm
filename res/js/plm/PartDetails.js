@@ -1,6 +1,7 @@
 class PartDetails  {
 
     constructor(appControl, context) {
+        this.baseuri = `/doku.php?plm=/api/v1/content/bom`;
         this.appControl = appControl;
         this.context = context;
         this.statusList = null;
@@ -23,12 +24,11 @@ class PartDetails  {
         this.partVersion = this.context;
 
         // Load child table
-        const baseuri = `/doku.php?plm=/api/v1/content/bom`;
         if (this.partVersion !== null) {
-            var uri = `${baseuri}/${this.partVersion.id}`;
+            var uri = `${this.baseuri}/${this.partVersion.id}`;
         } 
         else {
-            var uri = `${baseuri}`;
+            var uri = `${this.baseuri}`;
         }
 
         this.childList = new ItemContainer(
@@ -68,7 +68,7 @@ class PartDetails  {
                     {
                         "name": "isChild",
                         "label": "Is Child",
-                        "value": (item) => { return item.isChild ? 'Yes' : 'No' },
+                        "value": (item) => { console.log(JSON.stringify(item)); return (item.isChild === 1) ? 'Yes' : 'No' },
                         "select" : true
                     }
                 ]
@@ -93,10 +93,42 @@ class PartDetails  {
                     this.appControl.loadView('details', childItem);                    
                     return;
 
+                case 'isChild':
+                    this.childAddRemove(childItem.id, !childItem.isChild);
+                    return;
+
                 default:
                     console.log("Selected " + JSON.stringify(childItem));
                     return;
             }
         }
+    }
+
+    async childAddRemove(childId, newState) {
+        if ((this.partVersion === null) || (this.childList === null)) {
+            return;
+        } 
+
+        var body = {
+            "command" : newState ? "add" : "remove",
+            "childId" : childId
+        };
+
+        var uri = `${this.baseuri}/${this.partVersion.id}`;
+        var response = await fetch(uri, {
+            method: "PUT",
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Create/Update Request failed: ${response.status} - ${await response.text()}`);
+        }
+
+        this.childList.loadItems(true);
     }
 }
