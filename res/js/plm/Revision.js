@@ -1,9 +1,9 @@
 class Revision  {
 
-    constructor(appControl, context) {
+    constructor(appControl, revisionId) {
         this.baseuri = `content/bom`;
         this.appControl = appControl;
-        this.context = context;
+        this.revisionId = revisionId;
         this.statusList = null;
         this.categories = null;
         this.revision = null;
@@ -22,7 +22,12 @@ class Revision  {
         }
 
         // Assign Context to revision... now statusList is loaded.
-        this.revision = this.context;
+        if (this.revisionId) {
+            var api = new Api('content/versions');
+            this.revision = await api.get(this.revisionId);
+        } else {
+            this.revision = null;
+        }
 
         // check composite feature
         if (this.revision) {
@@ -60,18 +65,13 @@ class Revision  {
                         "html": (item) => { return `<span>${item.partDescription}</span><span class='small' >${item.revisionTag}</span>` }
                     },
                     {
-                        "name": "reference",
-                        "label": "Reference",
-                        "hidden": true
-                    },
-                    {
-                        "name": "designators",
-                        "label": "Designators",
-                        "hidden" : true
-                    },
-                    {
                         "name": "quantity",
                         "label": "Quantity",
+                        "editable" : true
+                    },
+                    {
+                        "name": "variants",
+                        "label": "Variants",
                         "editable" : true
                     },
                     {
@@ -85,6 +85,16 @@ class Revision  {
                         "select" : true,
                         "value": (item) => { return item.quantity > 0 ? 'true' : 'false'; },
                         "html": (item) => { return (item.quantity > 0) ? "<i class='fa fa-check-square-o' >" : "<i class='fa fa-square-o' >"; }
+                    },
+                    {
+                        "name": "reference",
+                        "label": "Reference",
+                        "hidden": true
+                    },
+                    {
+                        "name": "designators",
+                        "label": "Designators",
+                        "hidden": true
                     }
                 ]
             },
@@ -92,7 +102,7 @@ class Revision  {
         );
 
         if (this.revision !== null) {
-            await this.childList.loadFiltered(`parentId=${this.revision.id}`);
+            await this.childList.loadFiltered({'parentId': this.revision.id});
         }
         else {
             await this.childList.loadItems(true);            
@@ -122,10 +132,10 @@ class Revision  {
     }
 
     async doEdit(childItem) {
-        await this.childList.doEdit(childItem);  
+        return await this.childList.doEdit(childItem);  
     }
 
-    async editPart(partId) {
+    async openPart(partId) {
         if (partId == null) return;
         await this.appControl.loadView('parts', partId);
     }

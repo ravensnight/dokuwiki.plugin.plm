@@ -176,7 +176,7 @@ class Products {
     async selectRevision(revision, field) {
         switch (field) {
             case 'revisionTag':
-                await this.appControl.loadView('revision', revision);
+                await this.appControl.loadView('revision', revision.id);
                 break;
 
             case 'assign':
@@ -193,7 +193,6 @@ class Products {
     async assignRevision(revisionId) {
 
         if (this.variant === null || this.variant.id === null) return;
-
 
         // settings for create
         var api = new Api('content/variants');

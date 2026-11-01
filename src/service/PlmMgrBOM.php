@@ -44,7 +44,7 @@ class PlmMgrBOM extends PlmMgrBase {
         if ($parents !== null) {
             $parents[] = $parentVersion->pk;
         } else {
-            $parents = [$parentVersion->pk ];
+            $parents = [ $parentVersion->pk ];
         }
 
         /** @var Revision[] */
@@ -71,11 +71,12 @@ class PlmMgrBOM extends PlmMgrBase {
     private function createVersionData(Revision $childVersion, ?int $parentKey): array
     {
         $db = PlmDB::get();
-        $part = $childVersion->fetchPart($db);
-        $category = $part->fetchCategory($db);
 
-        $quantity = 0;
-        $designators = '';
+        /** @var Part */
+        $part = $childVersion->fetchPart($db);
+
+        /** @var Category */
+        $category = $part->fetchCategory($db);
 
         /** @var ?PartItemRef */
         $itemRef = null;
@@ -83,9 +84,23 @@ class PlmMgrBOM extends PlmMgrBase {
             $itemRef = PartItemRef::entry($db, $parentKey, $childVersion->pk);
         }
 
+        /** @var Variant[] */
+        $variantNames = [];
+        $quantity = 0;
+        $designators = '';
+
         if ($itemRef !== null) {
             if (isset($itemRef->quantity)) $quantity = $itemRef->quantity;
             if (isset($itemRef->designators)) $designators = $itemRef->designators;
+
+            $variants = $itemRef->fetchVariants($db);
+            foreach ($variants as $var) {
+                $variantNames[] = $var->name;
+            }
+
+            if (empty($variantNames)) {
+                $variantNames[] = '*';
+            }
         }
 
         return [
@@ -98,7 +113,8 @@ class PlmMgrBOM extends PlmMgrBase {
             "partCategoryId" => $category->pk,
             "statusId" => $childVersion->statusId,
             "quantity" => $quantity,
-            "designators" => $designators
+            "designators" => $designators,
+            'variants' => implode(",", $variantNames)
         ];
     }
 

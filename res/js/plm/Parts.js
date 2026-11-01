@@ -142,7 +142,7 @@ class Parts {
 
     async revisionSelect(item, field) {
         if ((item !== null) && (field == 'revisionTag')) {
-            this.appControl.loadView('revision', item);
+            this.appControl.loadView('revision', item.id);
         }
     } 
 
