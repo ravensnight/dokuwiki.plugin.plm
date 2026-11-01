@@ -24,8 +24,8 @@ class PlmMgrVersions extends PlmMgrBase {
     }
 
     protected function getAll(PlmDB $db) : array {
-        /** @var PartVersion[] $versions */
-        $versions = PartVersion::entries($db);
+        /** @var Revision[] $versions */
+        $versions = Revision::entries($db);
 
         $result = [];
         foreach ($versions as $v) {
@@ -36,7 +36,7 @@ class PlmMgrVersions extends PlmMgrBase {
     }
 
     protected function forPk(PlmDB $db, int $key) : ?array {
-        $v = PartVersion::byPk($db, $key);
+        $v = Revision::byPk($db, $key);
         if ($v === null) {
             return null;
         }
@@ -44,7 +44,7 @@ class PlmMgrVersions extends PlmMgrBase {
     }
 
     protected function forPartId(PlmDB $db, int $partId) : ?array {
-        $versions = PartVersion::byPartId($db, $partId);
+        $versions = Revision::byPartId($db, $partId);
         $result = [];
 
         if ($versions !== null) {
@@ -59,23 +59,24 @@ class PlmMgrVersions extends PlmMgrBase {
     /**
      * Creates an array representation of a version
      *
-     * @param PartVersion $v
+     * @param Revision $v
      * @return array
      */
     private function createVersionData($v): array
     {
         $db = PlmDB::get();
         $p = $v->fetchPart($db);
+        $c = $p->fetchCategory($db);
 
         return [
             "id" => $v->pk,
-            "name" => $v->name,
-            "major" => $v->major,
-            "revision" => $v->revision,
+            "revisionTag" => $v->revisionTag,
+            "reference" => $v->reference,
             "statusId" => $v->statusId,
             "partId" => $v->partId,
             "partIPN" => $p->ipn,
             "partDescription" => $p->description,
+            "partCategoryId" => $c->pk
         ];
     }
 
@@ -88,7 +89,7 @@ class PlmMgrVersions extends PlmMgrBase {
             throw new Exception(("Version Id must not be empty."));
         }
 
-        $v = PartVersion::byPK($db, $id);
+        $v = Revision::byPK($db, $id);
         if ($v === null) {
             throw new Exception(("Version not found for id: " . $id));
         }
@@ -106,7 +107,7 @@ class PlmMgrVersions extends PlmMgrBase {
             throw new Exception("Version Id must not be empty.");
         }
 
-        $v = PartVersion::byPK($db, $id);
+        $v = Revision::byPK($db, $id);
         if ($v === null) {
             throw new Exception("Version not found for id: " . $id);
         }
@@ -128,16 +129,12 @@ class PlmMgrVersions extends PlmMgrBase {
             $v->statusId = $stat->pk;
         }
 
-        if (isset($inputData['name'])) {
-            $v->name = $inputData['name'];
+        if (isset($inputData['revisionTag'])) {
+            $v->revisionTag = $inputData['revisionTag'];
         }
 
-        if (isset($inputData['major'])) {
-            $v->major = $inputData['major'];
-        }
-
-        if (isset($inputData['revision'])) {
-            $v->revision = $inputData['revision'];
+        if (isset($inputData['reference'])) {
+            $v->reference = $inputData['reference'];
         }
 
         // Save the updated version
@@ -163,19 +160,11 @@ class PlmMgrVersions extends PlmMgrBase {
         }
 
         if ($inputData['revision'] === null) {
-            throw new Exception("Revision number is not set.");
+            throw new Exception("Revision tag is not set.");
         }
+        $revisionTag = $inputData['revision'];
 
-        if ($inputData['major'] === null) {
-            throw new Exception("Major version number is not set.");
-        }
-
-        $name = $inputData['name'];
-        if ($name === null) {
-            $name = $part->ipn . '_v' . $inputData['major'] . '.rev' . $inputData['revision'];
-        }
-
-        $createdVersion = PartVersion::createNew($part, $stat, $name, $inputData['major'], $inputData['revision']);
+        $createdVersion = Revision::createNew($part, $stat, $revisionTag, $inputData['reference']);
         $createdVersion->save($db);
 
         return $this->createVersionData($createdVersion);

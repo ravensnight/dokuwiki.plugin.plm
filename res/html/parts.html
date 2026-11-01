@@ -5,8 +5,19 @@
         <section x-data="parts" x-html="html()"></section>
     </template>
     
-    <template x-if="versions">
-        <section x-data="versions" x-html="html()"></section>
+    <template x-if="parts && parts.current" >
+        <section>
+            <nav class="navigation">
+                <button :class="{ 'selected' : tab == 'revisions' }" @click="setTab('revisions')">Revisions</button>
+                <button :class="{ 'selected' : tab == 'sourcing' }" @click="setTab('sourcing')">Sourcing</button>
+            </nav>
+        
+            <div x-show="tab == 'revisions'" class="tabcontent" x-data="revisions" x-html="html()">
+            </div>
+        
+            <div x-show="tab == 'sourcing'" class="tabcontent">
+                <p class="info">Not yet filled.</p>
+            </div>
+        </section>
     </template>
-
 </div>

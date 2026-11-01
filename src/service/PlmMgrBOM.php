@@ -6,7 +6,7 @@ class PlmMgrBOM extends PlmMgrBase {
     public function getData(array $params): ?array
     {
         $db = PlmDB::get();
-        $key = PlmMgrBase::id($params); // version id
+        $key = $params['parentId'];
 
         if ($key === null) {
             return $this->getAll($db);
@@ -17,8 +17,8 @@ class PlmMgrBOM extends PlmMgrBase {
     }
 
     protected function getAll(PlmDB $db) : array {
-        /** @var PartVersion[] $versions */
-        $versions = PartVersion::entries($db);
+        /** @var Revision[] $versions */
+        $versions = Revision::entries($db);
 
         $result = [];
         foreach ($versions as $v) {
@@ -32,8 +32,8 @@ class PlmMgrBOM extends PlmMgrBase {
 
         $db = PlmDB::get();
 
-        /** @var PartVersion */
-        $parentVersion = PartVersion::byPK($db, $parentKey);
+        /** @var Revision */
+        $parentVersion = Revision::byPK($db, $parentKey);
         if ($parentVersion === null) {
             return null;
         }
@@ -47,7 +47,7 @@ class PlmMgrBOM extends PlmMgrBase {
             $parents = [$parentVersion->pk ];
         }
 
-        /** @var PartVersion[] */
+        /** @var Revision[] */
         $children = $parentVersion->fetchAllExcept($db, $parents);
         if ($children !== null) {
             $res = [];
@@ -64,61 +64,71 @@ class PlmMgrBOM extends PlmMgrBase {
     /**
      * Creates an array representation of a version
      *
-     * @param PartVersion $v
+     * @param Revision 
+     * @param ?int
      * @return array
      */
-    private function createVersionData(PartVersion $childVersion, ?int $parentKey): array
+    private function createVersionData(Revision $childVersion, ?int $parentKey): array
     {
         $db = PlmDB::get();
-
-        $isChild = PartItemRef::hasChild($db, $parentKey, $childVersion->pk);
         $part = $childVersion->fetchPart($db);
+        $category = $part->fetchCategory($db);
+
+        $quantity = 0;
+        $designators = '';
+
+        /** @var ?PartItemRef */
+        $itemRef = null;
+        if ($parentKey !== null) {
+            $itemRef = PartItemRef::entry($db, $parentKey, $childVersion->pk);
+        }
+
+        if ($itemRef !== null) {
+            if (isset($itemRef->quantity)) $quantity = $itemRef->quantity;
+            if (isset($itemRef->designators)) $designators = $itemRef->designators;
+        }
+
         return [
-            "id" => $childVersion->pk,
-            "name" => $childVersion->name,
-            "major" => $childVersion->major,
-            "revision" => $childVersion->revision,
-            "statusId" => $childVersion->statusId,
+            "id" => $childVersion->pk,            
+            "parentId" => $parentKey,
+            "revisionTag" => $childVersion->revisionTag,
             "partId" => $childVersion->partId,
             "partIPN" => $part->ipn,
             "partDescription" => $part->description,
-            "isChild" => $isChild ? 1 : 0
+            "partCategoryId" => $category->pk,
+            "statusId" => $childVersion->statusId,
+            "quantity" => $quantity,
+            "designators" => $designators
         ];
-    }    
+    }
 
     #[Override]
     public function update(array $inputData, ?array $attrNames): array
     {
-        $id = static::id($inputData);
-        if ($id === null) {
-            throw new Exception("Key/ID mus not be NULL to update a bom element.");
-        }
-
-        if (!isset($inputData['command'])) {
-            throw new Exception("Command is not set for BOM update.");
-        }
-        if (!isset($inputData['childId'])) {
-            throw new Exception("childId is not set for BOM update.");
-        }
-
-        $cmd = $inputData['command'];
-        $cid = $inputData['childId'];
-
         $db = PlmDB::get();
 
-        switch ($cmd)  {
-            case 'add' :
-                PartItemRef::addChild($db, $id, $cid);
-                break;
-
-            case 'remove' :
-                PartItemRef::removeChild($db, $id, $cid);
-                break;
-
-            default:
-                throw new Exception("Unknown command for BOM update: " . $cmd);
+        $childId = static::id($inputData);
+        if ($childId === null) {
+            throw new Exception("Child Key/ID mus not be NULL to update a bom element.");
         }
 
-        return [];
-    }    
+        if (!isset($inputData['parentId'])) {
+            throw new Exception("Partent Key/ID must not be NULL to update a bom element.");
+        }
+
+        $parentId = $inputData['parentId'];       
+
+        $quantity = $inputData['quantity'];
+        if ($quantity === null) {
+            throw new Exception("Quantity needs to be set to edit a bom item");
+        }
+        else if ($quantity > 0) {
+            PartItemRef::addChild($db, $parentId, $childId, $quantity);
+        }
+        else {
+            PartItemRef::removeChild($db, $parentId, $childId);
+        }
+
+        return $inputData;
+    }
 }

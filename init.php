@@ -20,10 +20,9 @@ require_once(__DIR__ . '/src/persist/Category.php');
 require_once(__DIR__ . '/src/persist/Status.php');
 require_once(__DIR__ . '/src/persist/Part.php');
 require_once(__DIR__ . '/src/persist/PartItemRef.php');
-require_once(__DIR__ . '/src/persist/PartVersion.php');
+require_once(__DIR__ . '/src/persist/Revision.php');
 require_once(__DIR__ . '/src/persist/Product.php');
-require_once(__DIR__ . '/src/persist/ProductVariant.php');
-require_once(__DIR__ . '/src/persist/VariantItemRef.php');
+require_once(__DIR__ . '/src/persist/Variant.php');
 require_once(__DIR__ . '/src/persist/Company.php');
 require_once(__DIR__ . '/src/persist/CompanyType.php');
 

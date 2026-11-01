@@ -98,17 +98,24 @@ class PartItemRef extends DbObject {
     public static function addChild(PlmDB $db, int $parentId, int $childId, ?int $amount = null, ?string $designators = null) {
         // Check if the pair already exists
         if (static::hasChild($db, $parentId, $childId)) {
-            return;
+            // Insert a new child entry
+            $q = "UPDATE plm_part_item SET quantity = :quantity, designators = :designators WHERE parent_version_id = :parent AND child_version_id = :child";
+            $db->querySingle($q, [
+                'parent' => $parentId,
+                'child' => $childId,
+                'quantity' => $amount === null ? 1 : $amount,
+                'designators' => $designators
+            ]);
+        } else {
+            // Insert a new child entry
+            $q = "INSERT INTO plm_part_item (parent_version_id, child_version_id, quantity, designators) VALUES (:parent, :child, :amount, :designators)";
+            $db->querySingle($q, [
+                'parent' => $parentId,
+                'child' => $childId,
+                'amount' => $amount === null ? 1 : $amount,
+                'designators' => $designators
+            ]);
         }
-
-        // Insert a new child entry
-        $q = "INSERT INTO plm_part_item (parent_version_id, child_version_id, quantity, designators) VALUES (:parent, :child, :amount, :designators)";
-        $db->querySingle($q, [
-            'parent' => $parentId,
-            'child' => $childId,
-            'amount' => $amount === null ? 1 : $amount,
-            'designators' => $designators
-        ]);
     }
 
     public static function removeChild(PlmDB $db, int $parentId, int $childId) {
@@ -121,7 +128,7 @@ class PartItemRef extends DbObject {
     }
 
     /**
-     * @var ProductVariant[]
+     * @var Variant[]
      */
     public function fetchVariants(PlmDB $db) : ?array {
 
@@ -134,7 +141,7 @@ class PartItemRef extends DbObject {
         if ($result) {
             $res = [];
             foreach($result as $row) {
-                $res[] = new ProductVariant($row);
+                $res[] = new Variant($row);
             }
 
             return $res;
@@ -144,8 +151,8 @@ class PartItemRef extends DbObject {
     }
 
     /** Get the child item for this reference link */
-    public function fetchChild(PlmDB $db) : PartVersion {
-        return PartVersion::byPK($db, $this->childVersionId);
+    public function fetchChild(PlmDB $db) : Revision {
+        return Revision::byPK($db, $this->childVersionId);
     }
 
     /**
@@ -212,6 +219,25 @@ class PartItemRef extends DbObject {
         /** @var bool */
         $res = ($result["amount"] > 0);
         return $res;
+    }
+
+    /** 
+     * Check, if there is a given child assigned to parent 
+     */
+    public static function entry(PlmDB $db, int $parent, int $child): ?PartItemRef
+    {
+        $q = "SELECT * FROM plm_part_item WHERE parent_version_id = :parentId AND child_version_id = :childId";
+
+        $result = $db->querySingle($q, [
+            "parentId" => $parent,
+            "childId" => $child
+        ]);
+
+        if ($result) {
+            return new self($result);
+        }
+
+        return null;
     }
 
     /**

@@ -24,8 +24,8 @@ class PlmMgrVariants extends PlmMgrBase {
     }
 
     protected function getAll(PlmDB $db) : array {
-        /** @var ProductVariant[] $versions */
-        $versions = ProductVariant::entries($db);
+        /** @var Variant[] $versions */
+        $versions = Variant::entries($db);
 
         $result = [];
         foreach ($versions as $v) {
@@ -36,7 +36,7 @@ class PlmMgrVariants extends PlmMgrBase {
     }
 
     protected function forPk(PlmDB $db, int $key) : ?array {
-        $v = ProductVariant::byPk($db, $key);
+        $v = Variant::byPk($db, $key);
         if ($v === null) {
             return null;
         }
@@ -44,7 +44,7 @@ class PlmMgrVariants extends PlmMgrBase {
     }
 
     protected function forProductId(PlmDB $db, int $prodId) : ?array {
-        $variants = ProductVariant::byProductId($db, $prodId);
+        $variants = Variant::byProductId($db, $prodId);
         $result = [];
 
         if ($variants !== null) {
@@ -59,7 +59,7 @@ class PlmMgrVariants extends PlmMgrBase {
     /**
      * Creates an array representation of a version
      *
-     * @param ProductVariant $v
+     * @param Variant $v
      * @return array
      */
     private function createVariantData($v): array
@@ -67,16 +67,16 @@ class PlmMgrVariants extends PlmMgrBase {
         /** @var PlmDB */
         $db = PlmDB::get();
 
-        /** @var PartVersion */
-        $pv = $v->fetchPartVersion($db);
+        /** @var Revision */
+        $pv = $v->fetchRevision($db);
 
         return [
             "id" => $v->pk,
             "name" => $v->name,
             "description" => $v->description,
             "productId" => $v->productId,
-            "partVersionId" => $v->partVersionId,
-            "partVersionName" => $pv === null ? 'n/a' : $pv->name
+            "revisionId" => $v->revisionId,
+            "revisionTag" => $pv === null ? 'n/a' : $pv->revisionTag
         ];
     }
 
@@ -89,7 +89,7 @@ class PlmMgrVariants extends PlmMgrBase {
             throw new Exception(("Version Id must not be empty."));
         }
 
-        $v = ProductVariant::byPK($db, $id);
+        $v = Variant::byPK($db, $id);
         if ($v === null) {
             throw new Exception(("Version not found for id: " . $id));
         }
@@ -107,7 +107,7 @@ class PlmMgrVariants extends PlmMgrBase {
             throw new Exception("Variant Id must not be empty.");
         }
 
-        $v = ProductVariant::byPK($db, $id);
+        $v = Variant::byPK($db, $id);
         if ($v === null) {
             throw new Exception("Variant not found for id: " . $id);
         }
@@ -121,18 +121,21 @@ class PlmMgrVariants extends PlmMgrBase {
             $v->productId = $product->pk;
         }
 
-        $name = isset($inputData['name']) ? $inputData['name'] : null;        
-        if ($name === null) {
-            throw new Exception("Variant name must not be empty.");
-        }        
-        $v->name = $inputData['name'];
+        if (isset($inputData['name'])) {
+            $name = $inputData['name'];
+            if ($name === null || $name === '') {
+                throw new Exception("Variant name must not be empty.");
+            }
+
+            $v->name = $name;
+        }
 
         if (isset($inputData['description'])) {
             $v->description = $inputData['description'];
         }
 
-        if (isset($inputData['partVersionId'])) {
-            $v->partVersionId = $inputData['partVersionId'];
+        if (isset($inputData['revisionId'])) {
+            $v->revisionId = $inputData['revisionId'];
         }
 
         // Save the updated version
@@ -158,9 +161,9 @@ class PlmMgrVariants extends PlmMgrBase {
         }
 
         $desc = isset($inputData['description']) ? $inputData['description'] : '';
-        $part = isset($inputData['partVersionId']) ? $inputData['partVersionId'] : null;
+        $part = isset($inputData['revisionId']) ? $inputData['revisionId'] : null;
 
-        $variant = ProductVariant::createNew($product, $name, $desc, $part);
+        $variant = Variant::createNew($product, $name, $desc, $part);
         $variant->save($db);
 
         return $this->createVariantData($variant);

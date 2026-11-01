@@ -9,8 +9,18 @@ class PlmMgrParts extends PlmMgrBase
         $key = PlmMgrBase::id($params);
 
         if ($key === null) {
-            /** @var Part[] $parts */
-            $parts = Part::entries($db);
+
+            // filtered?
+            $partId = $params['partId'];
+            if ($partId === null) {
+                /** @var Part[] $parts */
+                $parts = Part::entries($db);
+            } 
+            else {
+                $parts = [
+                    Part::byPK($db, $partId)
+                ];
+            }
 
             $result = [];
             foreach ($parts as $p) {
@@ -71,7 +81,7 @@ class PlmMgrParts extends PlmMgrBase
         // create a new version object.
         try {
             $status = Status::byPk($db, 1); 
-            $version = PartVersion::createNew($part, $status, $part->ipn . '_v1.rev1', 1, 1);
+            $version = Revision::createNew($part, $status, $part->ipn . ' / Rev. A', null);
             $version->save($db);
 
         } catch (Exception $e) {

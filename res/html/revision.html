@@ -1,0 +1,43 @@
+<div class="plm-module">
+    <template x-if="revision">
+        <section class="details">
+            <h2 x-text="revision.revisionTag" ></h2>
+            <h3 >Revision Details</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th class="id">ID</th>
+                        <th class="ipn">Part</th>
+                        <th class="category">Category</th>
+                        <th class="revision">Revision</th>
+                        <th class="reference">Reference</th>
+                        <th class="status">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="id" >
+                        <td class="id" x-text="revision.id" ></td>
+                        <td class="part" >
+                            <a href="#" @click.prevent="editPart(revision.partId)" >
+                                <span x-text="revision.partIPN" ></span>
+                                <span class="small" x-text="revision.partDescription"></span>
+                            </a>
+                        </td>
+                        <td class="category" x-text="getCategoryName(revision.partCategoryId)"></td>
+                        <td class="revision" x-text="revision.revisionTag" ></td>
+                        <td class="reference" x-text="revision.reference"></td>
+                        <td class="status" x-text="getStatusName(revision.statusId)"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </template>
+    <template x-if="!revision">
+        <p class="warning">No Part Version Selected</p>
+    </template>
+    
+    <template x-if="childList" >
+        <section x-data="childList" x-html="html()"></section>
+    </template>
+
+</div>

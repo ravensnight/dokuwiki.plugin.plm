@@ -4,18 +4,24 @@
  */
 class ItemContainer extends PageFragment {
 
-    constructor(uri, metadata, defaultData = null) {
+    constructor(contentUri, metadata, defaultData = null) {
 
-        super('/doku.php?plm=/api/v1/pages/ItemContainer');
+        super('pages/ItemContainer');
 
-        this.baseUri = uri;
+        this.api = new Api(contentUri);
         this.metadata = metadata;
 
-        if (this.metadata['features'] === null) {
-            this.metadata['features'] = {  // NULL assigns the defaults
-                'create' : {},
-                'edit' : {}, 
-                'delete' : {}
+        if (this.metadata['actions'] == null) {
+            console.log("Add default actions");
+            this.metadata['actions'] = {  // NULL assigns the defaults
+                'edit' : {
+                    'icon': 'fa fa-pencil-square-o',
+                    'callback' : (item) => this.doEdit(item)
+                }, 
+                'delete' : {
+                    'icon': 'fa fa-remove',
+                    'callback': (item) => this.doDelete(item)
+                }
             };
         }
 
@@ -42,70 +48,61 @@ class ItemContainer extends PageFragment {
     }
 
     async loadItems(force = false) {
-
         if ((this.items == null) || force) {
-            const f = this.filter == null ? '' : '?' + this.filter;
-            const uri = `${this.baseUri}${f}`;
-
-            const response = await fetch(uri);
-            if (!response.ok) {
-                throw new Error(`Failed to load item list: ${response.status} - ${response.text}`);
-            }
-
-            this.items = await response.json();
+            this.items = await this.api.all(this.filter);
         }
     }
 
     async load(itemId) {
-        const uri = `${this.baseUri}/${itemId}`;
-        const resp = await fetch(uri);
-        if (!resp.ok) {
-            throw new Error(`Failed to load item data: : ${resp.status} - ${resp.text}`)
-        }
-
-        return await resp.json();
+        return await this.api.get(itemId);
     }
 
     async save() {
         if (!this.current || !this.editing) return;
 
-        // settings for create
-        var method = 'POST'
-        var uri = this.baseUri;
-
+        var result = null;
         if (this.current.id != null) {
-            // settings to update existing
-            uri += `/${this.current.id}`;
-            method = 'PUT';
+            result = await this.api.put(this.current.id, this.current);
+        } 
+        else {
+            result = await this.api.post(this.current);
         }
 
-        const response = await fetch(uri, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-
-            body: JSON.stringify(this.current)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Create/Update Request failed: ${response.status} - ${await response.text()}`);
-        }
-
-        this.current = await response.json();
         this.loadItems(true);
+        return result;
     }
 
-    async resolve(item, field) {
+    /**
+     * Provide the field html for table rendering
+     * @param {*} item 
+     * @param {*} field 
+     * @returns 
+     */
+    async fieldHtml(item, field) {
+        if (!field || !item) return '';
+
+        if (field['html'] != null) {
+            var fnHtml = field['html'];
+            return fnHtml(item);
+        } else {
+            return await this.fieldValue(item, field);
+        }
+    }
+
+    /**
+     * Provide the field value for edting and table (if no html is specified)
+     * @param {*} item 
+     * @param {*} field 
+     * @returns 
+     */
+    async fieldValue(item, field) {
 
         if (!field || !item) return null;
 
         const value = item[field.name];
-
         if (field['choice'] != null) {
             const choice = field['choice'];
-            const found = choice.find(entry => entry.id === value);
+            const found = choice.find(entry => entry.id == value);
 
             return found.name;
         }
@@ -120,85 +117,53 @@ class ItemContainer extends PageFragment {
         }
     }
 
-    async callback(feature, item, field) {
-        var f = this.metadata.features[feature];
-        if (!f) return;
-
-        var cb = f['callback'];
-        if (!cb) return;
-
-        cb(item, field);
-    }
-
-    async doDelete(itemId) {
-
-        if (!itemId || !this.metadata.features['delete']) return;
-
-        cb = this.metadata.features.delete['callback'];
-        if (cb) {
-            cb(itemId);
+    async selectCallback(item, field) {
+        var cb = this.metadata['select'];
+        if (!cb) {
             return;
-        } 
-        else {
-            var uri = `${this.baseUri}/${itemId}`;
-            const response = await fetch(uri, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Deletion request failed: ${response.status} - ${await response.text()}`);
-            }
-
-            await this.loadItems(true);
         }
+
+        await cb(item, field);
     }
 
     async doSelect(item, field) {
-
-        /*
-        if (item) {
-            console.log(`Select called: ${item.id}, ${field}`);
-        } else {
-            console.log(`Select called: NULL, ${field}`);
-        }
-        */
-
         this.editing = false;
-        
-        if (this.metadata.features['select'] && (item !== null)) {
-            this.current = item;
-        } else {
-            this.current = null;
-        }
-
-        this.callback('select', item, field);
+        this.current = item;
+        this.selectCallback(item, field);
     }
 
-    async doEdit(itemId) {
+    async itemAction(item, action) {
+        if ((item == null) || (action == null)) return;
 
-        this.callback('select', null);
+        var actionEntry = this.metadata.actions[action];
+        if (actionEntry == null) return;
 
-        if (itemId == null) {
-            if (this.metadata.features['create']) {
-                this.current = JSON.parse(this.defaultData);
-                this.editing = true;
-            } else {
-                this.current = null;
-                this.editing = false;
-            }
-        } else {
-            if (this.metadata.features['edit']) {
-                this.current = await this.load(itemId);
-                this.editing = true;
-            } else {
-                this.current = null;
-                this.editing = false;
-            }
-        }
+        var cb = actionEntry['callback']
+        if (cb == null) return;
+        
+        this.current = null;
+        this.current = await cb(item);
+
+        await this.loadItems(true);
+    }
+
+    async doDelete(item) {
+        if (!item) return;
+
+        await this.api.delete(item.id);
+        return null;
+    }
+
+    async doCreate() {
+        this.selectCallback(null, null);
+        this.editing = true;        
+        this.current = JSON.parse(this.defaultData);    
+    }
+
+    async doEdit(item) {
+        this.selectCallback(null, null);
+        this.editing = true;     
+        return item;
     }
 
     async doSubmit(action) {
@@ -209,17 +174,18 @@ class ItemContainer extends PageFragment {
 
             case 'reset':
             case 'clear':
-                await this.doEdit(null);
+                this.current = await this.doEdit(null);
+                return;
+
+            case 'delete':
+                this.current = await this.doDelete(this.current.id);
                 return;
 
             case 'save':
             case 'submit':
-                await this.save();
+                this.current = await this.save();
                 return;
 
-            case 'delete':
-                await this.doDelete(this.current.id);
-                return;
 
             default:
                 throw new Error("Unknown action type: " + action);

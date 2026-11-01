@@ -5,8 +5,8 @@
 class PageFragment {
 
     /** Construction */
-    constructor(htmlSource) {
-        this.htmlSource = htmlSource;
+    constructor(fragmentUri) {
+        this.fragmentUri = fragmentUri;        
     }
 
     /**
@@ -14,11 +14,7 @@ class PageFragment {
      * @returns {string} HTML content of the page fragment
      */
     async html() {
-        const response = await fetch(this.htmlSource)
-        if (!response.ok) {
-            throw new Exception(`Failed to load view: ${response.status} - ${response.text()}`);
-        }
-
-        return await response.text();
+        var api = new Api(this.fragmentUri);        
+        return await api.all(null, false);
     }
 }

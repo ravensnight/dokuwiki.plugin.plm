@@ -55,10 +55,10 @@ class Product extends DbObject {
     }
 
     /**
-     * @return ProductVariant[]
+     * @return Variant[]
      */
     public function fetchVariants(PlmDB $db) : ?array {
-        return ProductVariant::byProductId($db, $this->pk);
+        return Variant::byProductId($db, $this->pk);
     }
 
     /**

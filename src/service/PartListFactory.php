@@ -60,7 +60,7 @@ class PartListFactory {
      * @param int $partId 
      * @return void
      */
-    public static function renderPartVersionList(HtmlBuilder $html, PlmDB $db, int $partId): void {
+    public static function renderRevisionList(HtmlBuilder $html, PlmDB $db, int $partId): void {
         $html->opn('table')
             ->opn('thead')
             ->opn('tr')
@@ -73,7 +73,7 @@ class PartListFactory {
             ->cls() // thead
             ->opn('tbody');
 
-        $partVersion = PartVersion::byPartId($db, $partId);        
+        $partVersion = Revision::byPartId($db, $partId);        
         foreach ($partVersion as $v) {
 
             /** @var Status $status */

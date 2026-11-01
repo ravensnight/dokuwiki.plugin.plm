@@ -13,8 +13,7 @@ class AppControl extends Page {
 
     /** Load the default view */
     async init() {
-
-        console.log("AppControl::init()");
+        // console.log("AppControl::init()");
         this.loadView('products');
     }
 
@@ -50,11 +49,12 @@ class AppControl extends Page {
         var res = null;
         switch (view) {
             case 'parts':
-                res = new Parts(this);
+                // requires part id
+                res = new Parts(this, context);
                 break;
 
-            case 'details':
-                res = new PartDetails(this, context);
+            case 'revision':
+                res = new Revision(this, context);
                 break;
 
             case 'products':
@@ -67,10 +67,6 @@ class AppControl extends Page {
 
             case 'companies':
                 res = new Companies();
-                break;
-
-            case 'bom' :
-                res = new BOMControl(context);
                 break;
 
             default:

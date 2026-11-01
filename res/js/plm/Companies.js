@@ -14,10 +14,11 @@ class Companies {
         const companyTypes = await types.json();
 
         this.companies = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/companies',
+            'content/companies',
             {
                 'title': 'Company',
-                'features' : null,
+                'select' : null,
+                'actions' : null,
                 'fields': [
                     {
                         'name': 'id',

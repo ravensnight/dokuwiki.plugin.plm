@@ -8,7 +8,7 @@ class PlmBomMacro extends PlmBuilderMacro {
     private readonly PlmDB $db;
 
     private string $variantName = '';
-    private ?ProductVariant $variant = null;
+    private ?Variant $variant = null;
 
     /**
      * @param PlmDB $db
@@ -29,7 +29,7 @@ class PlmBomMacro extends PlmBuilderMacro {
         }
 
         /** Acquire product variant */
-        $this->variant = ProductVariant::byName($this->db, $this->variantName);
+        $this->variant = Variant::byName($this->db, $this->variantName);
         if ($this->variant === null) {
             throw new Exception('plm:bom - Product variant not found: ' . $this->variantName);
         }
@@ -76,7 +76,7 @@ class PlmBomMacro extends PlmBuilderMacro {
 
     /**
      * Render product variant data.
-     * @param ProductVariant $variant
+     * @param Variant $variant
      *
      */
     private function renderVariantAttrs(HtmlBuilder $html): void {
@@ -104,7 +104,7 @@ class PlmBomMacro extends PlmBuilderMacro {
     private function collectPartItemRefAttrs(PartItemRef $itemRef) : array {
         if ($itemRef !== null) {
             $variantValues = [];
-            /** @var ProductVariant[] */
+            /** @var Variant[] */
             $variants = $itemRef->fetchVariants($this->db);
             if ($variants) {
                 foreach ($variants as $var) {
@@ -125,7 +125,7 @@ class PlmBomMacro extends PlmBuilderMacro {
     /**
      * Render version and (optionally) part-item attributes in one table.
      */
-    private function collectVersionAttrs(PartVersion $version): array {
+    private function collectVersionAttrs(Revision $version): array {
         $res = [
             'Version' => (string) $version->major . '.rev' . (string) $version->revision
         ];
@@ -154,7 +154,7 @@ class PlmBomMacro extends PlmBuilderMacro {
     }
 
 
-    private function renderPartHeader(HtmlBuilder $html, PartVersion $version, array $indexPath) : void {
+    private function renderPartHeader(HtmlBuilder $html, Revision $version, array $indexPath) : void {
         /** @var Part */
         $part = $version->fetchPart($this->db);
 
@@ -197,7 +197,7 @@ class PlmBomMacro extends PlmBuilderMacro {
         $this->renderAttributeList($html, $attrs);
     }
 
-    private function renderPartVersionChildren(HtmlBuilder $html, PartVersion $version, int $level, array $indexPath, array $itemPath) : void {
+    private function renderRevisionChildren(HtmlBuilder $html, Revision $version, int $level, array $indexPath, array $itemPath) : void {
         /** @var PartItemRef[] */
         $children = $version->fetchChildren($this->db);
 
@@ -258,7 +258,7 @@ class PlmBomMacro extends PlmBuilderMacro {
         */
         $nextItemPath = $itemPath;
         $nextItemPath[$versionName] = true;
-        $this->renderPartVersionChildren($html, $childVersion, $level, $indexPath, $nextItemPath);
+        $this->renderRevisionChildren($html, $childVersion, $level, $indexPath, $nextItemPath);
 
         $html->cls();
     }
@@ -309,7 +309,7 @@ class PlmBomMacro extends PlmBuilderMacro {
         */
         $nextItemPath = $itemPath;
         $nextItemPath[$versionName] = true;
-        $this->renderPartVersionChildren($html, $childVersion, $level, $indexPath, $nextItemPath);
+        $this->renderRevisionChildren($html, $childVersion, $level, $indexPath, $nextItemPath);
 
         $html->cls();
     }

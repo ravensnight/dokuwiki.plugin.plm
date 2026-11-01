@@ -70,10 +70,10 @@ class Part extends DbObject {
     }
 
     /**
-     * @return PartVersion[]
+     * @return Revision[]
      */
     public function fetchVersions(PlmDB $db) : ?array {
-        return PartVersion::byPartId($db, $this->pk);
+        return Revision::byPartId($db, $this->pk);        
     }
 
     public function fetchCategory(PlmDB $db) : ?Category {

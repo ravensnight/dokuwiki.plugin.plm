@@ -93,13 +93,12 @@ CREATE INDEX idx_plm_part_category ON plm_part(category_id);
 -- 5. Part Versions
 -- ============================================================
 
-CREATE TABLE plm_part_version (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    part_id     INTEGER NOT NULL,
-    major       INTEGER NOT NULL,
-    revision    INTEGER NOT NULL,
-    version_id  TEXT NOT NULL UNIQUE,
-    status_id   INTEGER,
+CREATE TABLE plm_part_revision (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    part_id         INTEGER NOT NULL,
+    revision_tag    TEXT NOT NULL UNIQUE,
+    reference       TEXT,
+    status_id       INTEGER,
 
     FOREIGN KEY (part_id)
         REFERENCES plm_part(id)
@@ -112,12 +111,11 @@ CREATE TABLE plm_part_version (
         ON DELETE SET NULL
 );
 
+CREATE INDEX idx_plm_part_revision_part 
+    ON plm_part_revision(part_id);
 
-CREATE INDEX idx_plm_part_version_part 
-    ON plm_part_version(part_id);
-
-CREATE INDEX idx_plm_part_version_status 
-    ON plm_part_version(status_id);
+CREATE INDEX idx_plm_part_revision_status 
+    ON plm_part_revision(status_id);
 
 
 -- ============================================================

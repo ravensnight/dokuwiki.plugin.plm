@@ -1,41 +1,33 @@
 class Parts {
 
-    constructor(appControl) {
+    constructor(appControl, partId) {
         this.appControl = appControl;
         this.categories = null;
         this.statusList = null;
         this.parts = null;
-        this.versions = null;
+        this.revisions = null;
         this.childList = null;
+        this.partId = partId;
+        this.tab = 'revisions';
     }
 
     async setup() {
         if (this.categories == null) {
-            const response = await fetch('/doku.php?plm=/api/v1/content/categories');
-            if (!response.ok) {
-                throw new Error(`Failed to load categories: ${response.status} - ${response.text}`);
-            }
-
-            this.categories = await response.json();
+            var api = new Api('content/categories');
+            this.categories = await api.all();
         }
 
         if (this.statusList == null) {
-            const response = await fetch('/doku.php?plm=/api/v1/content/status');
-            if (!response.ok) {
-                throw new Error(`Failed to load statús : ${response.status} - ${response.text}`);
-            }
-
-            this.statusList = await response.json();
+            var api = new Api('content/status');
+            this.statusList = await api.all();
         }
 
         this.parts = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/parts',
+            'content/parts',
             {
                 "title": "Part Overview",
-                'features': {
-                    'create': {}, 'edit': {}, 'delete': {},
-                    'select': { 'callback': (part, field) => this.selectPart(part, field) }
-                },
+                'select': (part, field) => this.selectPart(part, field),
+                'actions': null,
                 "fields" : [
                     {
                         'name': 'id',
@@ -69,39 +61,43 @@ class Parts {
             }
         )
 
-        await this.parts.loadItems();
+        if (this.partId != null) {
+            await this.parts.loadFiltered({ 'partId' : this.partId });
+        } else {
+            await this.parts.loadItems(true);
+        }
+    }
+
+    async setTab(tab) {
+        this.tab = tab;
     }
 
     async selectPart(part, field) {
 
-        this.versionSelect(null, null);
+        this.revisionSelect(null, null);
 
         if (!part) {
-            this.versions = null;
+            this.revisions = null;
             return;
         }
 
         /** Part version defaults */
         const defaults = {
             "id" : null,
-            "name" : '',
-            "description" : '',
-            "major" : 1,
-            "revision" : 1,
+            "revisionTag" : '',
+            "reference" : '',
             "statusId": this.statusList[0].id,
             "partId" : part.id
         };
 
-        if (this.versions == null) {
+        if (this.revisions == null) {
 
-            this.versions = new ItemContainer(
-                '/doku.php?plm=/api/v1/content/versions',
+            this.revisions = new ItemContainer(
+                'content/versions',
                 {
-                    "title" : "Part Versions",
-                    "features" : { 
-                        'create' : {}, 'edit' : {}, 'delete' : {},
-                        'select' : { 'callback' : (item, field) => this.versionSelect(item, field) }
-                    },
+                    "title" : "Part Revisions",
+                    'select': (item, field) => this.revisionSelect(item, field),
+                    "actions" : null,
                     "fields" : [
                         {
                             "name": "id",
@@ -109,26 +105,22 @@ class Parts {
                             "editable": false,
                         },
                         {
-                            "name" : "name",
-                            "label" : "Name",
+                            "name" : "revisionTag",
+                            "label" : "Revision",
                             "editable" : true,
-                            'select' : true
-                        },
-                        {
-                            "name": "major",
-                            "label": "Major Version",
-                            "editable": true,
-                        },
-                        {
-                            "name": "revision",
-                            "label": "Revision",
-                            "editable": true,
+                            'select' : true,
+                            "html": (item) => { return `<span>${item.revisionTag}</span><span class='small' >${item.partDescription}</span>` }
                         },
                         {
                             "name": "statusId",
                             "label": "Status",
                             "editable": true,
                             "choice": this.statusList,
+                        },
+                        {
+                            "name": "reference",
+                            "label": "Reference",
+                            "editable": true,
                         },
                         {
                             "name": "partId",
@@ -142,15 +134,15 @@ class Parts {
             );
 
         } else {
-            this.versions.setDefaults(defaults);
+            this.revisions.setDefaults(defaults);
         }
 
-        await this.versions.loadFiltered(`partId=${part.id}`);
+        await this.revisions.loadFiltered({ "partId": part.id });
     }
 
-    async versionSelect(item, field) {
-        if ((item !== null) && (field === 'name')) {
-            this.appControl.loadView('details', item);
+    async revisionSelect(item, field) {
+        if ((item !== null) && (field == 'revisionTag')) {
+            this.appControl.loadView('revision', item);
         }
     } 
 

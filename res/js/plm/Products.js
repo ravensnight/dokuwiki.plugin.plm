@@ -2,23 +2,28 @@
 class Products {
     
     constructor(appControl) {
+        this.appControl = appControl;
         this.statusList = null;
         this.products = null;
         this.variants = null;
         this.variantParts = null;
-        this.appControl = appControl;
-        this.partSelect = false;
+        this.categories = null;
     }
 
     async setup() {
+
+        var api = new Api('content/categories');
+        this.categories = await api.all();
+
+        api = new Api('content/status');
+        this.statusList = await api.all();
+
         this.products = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/products',
+            'content/products',
             {
                 'title': 'Product List',
-                'features' : {
-                    'create' : {}, 'edit' : {}, 'delete' : {},
-                    'select': { 'callback' : (product) => this.selectProduct(product) }
-                },
+                'select': (product) => this.selectProduct(product),
+                'actions' : null, // adds default actions create/edit/delete
                 'fields': [
                     {
                         'name': 'id',
@@ -50,7 +55,7 @@ class Products {
 
     async selectProduct(product) {
 
-        if (product === null) {
+        if (product == null) {
             this.selectVariant(null);
             this.variants = null;
             return;
@@ -62,47 +67,39 @@ class Products {
             "name" : '',
             "description" : '',
             "productId" : product.id,
-            "partVersionId" : null
+            "revisionId" : null
         };
 
         if (this.variants == null) {
-            this.variants = new ItemContainer('/doku.php?plm=/api/v1/content/variants',
+            this.variants = new ItemContainer('content/variants',
                 {
                     'title': 'Product Variants',
-                    'features': {
-                        'create' : {}, 'edit' : {}, 'delete' : {},
-                        'select' : { 'callback' : (variant) => this.selectVariant(variant) }
-                    },
+                    'select': (variant) => this.selectVariant(variant),
+                    'actions': null, // adds default actions create/edit/delete
                     'fields': [
                         {
                             'name': 'id',
                             'label': 'ID',
-                            'editable': false,
-                            'hidden': false,
                         },
                         {
                             'name':'name',
                             'label':'Name',
                             'select' : true,
                             'editable': true,
-                            'hidden': false
                         },
                         {
                             'name': 'description',
                             'label': 'Description',
                             'editable': true,
-                            'hidden': false
                         },
                         {
                             'name': 'productId',
                             'label': 'Product ID',
-                            'editable': false,
                             'hidden': true
                         },
                         {
-                            'name': 'partVersionName',
-                            'label': 'Master Part Version',
-                            'editable': false,
+                            'name': 'revisionTag',
+                            'label': 'Assigned Part Revision',
                         },
                     ]
                 },  
@@ -113,7 +110,9 @@ class Products {
             this.variants.setDefaults(defaultData);
         }
 
-        this.variants.loadFiltered(`productId=${product.id}`);
+        this.variants.loadFiltered({
+            'productId' : `${product.id}`
+        });
     }
 
     async selectVariant(variant) {    
@@ -126,23 +125,13 @@ class Products {
 
         this.variant = variant;
 
-        /** Load status list, if not yet done */
-        if (this.statusList == null) {
-            const response = await fetch('/doku.php?plm=/api/v1/content/status');
-            if (!response.ok) {
-                throw new Error(`Failed to load statús : ${response.status} - ${response.text}`);
-            }
-
-            this.statusList = await response.json();
-        }
-
         if (!this.variantParts) {
             this.variantParts = new ItemContainer(
-                '/doku.php?plm=/api/v1/content/versions',
+                'content/versions',
                 {
                     "title": "Assignable Part Versions",
-                    "features": { 
-                        'select': { 'callback': (partVersion, field) => this.selectVersion(partVersion, field) }
+                    'select': (partVersion, field) => this.selectRevision(partVersion, field),
+                    'actions': {
                     },
                     "fields": [
                         {
@@ -150,21 +139,19 @@ class Products {
                             "label": "ID",
                         },
                         {
-                            "name": "partIPN",
-                            "label": "IPN",
-                        },
-                        {
-                            "name": "name",
-                            "label": "Name",
-                            'select' : true
-                        },
-                        {
-                            "name": "major",
-                            "label": "Major Version",
-                        },
-                        {
-                            "name": "revision",
+                            "name": "revisionTag",
                             "label": "Revision",
+                            'select': true,
+                            "html": (item) => { return `<span>${item.partDescription}</span><span class='small' >${item.revisionTag}</span>` }
+                        },
+                        {
+                            'name': 'partCategoryId',
+                            'label': 'Category',
+                            'choice': this.categories,
+                        },
+                        {
+                            "name": "reference",
+                            "label": "Reference",
                         },
                         {
                             "name": "statusId",
@@ -175,7 +162,7 @@ class Products {
                             "name": "assign",
                             "label": "Assigned",
                             'select': true,
-                            "value": (partVersion) => { return (partVersion.id == this.variant.partVersionId) ? 'Yes' : 'No'; }
+                            "html": (item) => { return (item.id == this.variant.revisionId) ? "<i class='fa fa-check-square-o' >" : "<i class='fa fa-square-o' >"; }
                         }
                     ]
                 },
@@ -186,48 +173,35 @@ class Products {
         await this.variantParts.loadItems(true);
     }
 
-    async selectVersion(partVersion, field) {
+    async selectRevision(revision, field) {
         switch (field) {
-            case 'assign':
-                await this.setPartVersion(partVersion.id);
-                console.log(`Assign part version ID: ${partVersion.id}`);
+            case 'revisionTag':
+                await this.appControl.loadView('revision', revision);
                 break;
 
-            case 'name':
-                await this.appControl.loadView('details', partVersion);
-                return;
+            case 'assign':
+                await this.assignRevision(revision.id);
+                console.log(`Assign part version ID: ${revision.id}`);
+                break;
 
             default:
-                console.log(`${field} select for version ID: ${partVersion.id}`);
+                console.log(`${field} select for version ID: ${revision.id}`);
                 break;
         }        
     }
 
-    async setPartVersion(partVersionId) {
+    async assignRevision(revisionId) {
 
         if (this.variant === null || this.variant.id === null) return;
 
-        this.variant.partVersionId = partVersionId;
 
         // settings for create
-        var uri = `/doku.php?plm=/api/v1/content/variants/${this.variant.id}`;
+        var api = new Api('content/variants');
 
-        const response = await fetch(uri, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-
-            body: JSON.stringify(this.variant)
+        this.variant =await api.put(this.variant.id, {
+            'revisionId' : revisionId
         });
 
-        if (!response.ok) {
-            throw new Error(`Update Request failed: ${response.status} - ${await response.text()}`);
-        }
-
-        this.variant = await response.json();
-        this.variants.loadItems();
-
+        this.variants.loadItems(true);
     }
 }

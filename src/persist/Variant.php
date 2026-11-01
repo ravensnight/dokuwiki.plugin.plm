@@ -1,28 +1,28 @@
 <?php
 
-class ProductVariant extends DbObject {
+class Variant extends DbObject {
 
     public int $productId;
     public string $name;
     public ?string $description = null;
-    public ?int $partVersionId = null;
+    public ?int $revisionId = null;
 
     protected function assign(array $fields) {
         $this->name = $fields['variant_id'];
         $this->productId = $fields['product_id'];
         $this->description = $fields['description'];
-        $this->partVersionId = $fields['part_version_id'];
+        $this->revisionId = $fields['part_version_id'];
     }
 
     /**
      * Create new instance
      */
-    public static function createNew(Product $product, string $name, ?string $description, ?int $partVersionId = null) : self {
+    public static function createNew(Product $product, string $name, ?string $description, ?int $revisionId = null) : self {
         return new self([
             'variant_id' => $name,
             'product_id' => $product->pk,
             'description' => $description,
-            'part_version_id' => $partVersionId
+            'part_version_id' => $revisionId
         ]);
     }
 
@@ -53,7 +53,7 @@ class ProductVariant extends DbObject {
         ]);
 
         if ($result) {
-            return new ProductVariant($result);
+            return new Variant($result);
         }
 
         return null;
@@ -62,14 +62,14 @@ class ProductVariant extends DbObject {
     /**
      * Find a product variant by name.
      */
-    public static function byName(PlmDB $db, string $name) : ?ProductVariant {
+    public static function byName(PlmDB $db, string $name) : ?Variant {
 
         $result = $db->querySingle("SELECT * FROM plm_product_variant WHERE variant_id = :variant_id", [
             'variant_id' => $name
         ]);
 
         if ($result) {
-            return new ProductVariant($result);
+            return new Variant($result);
         }
 
         return null;
@@ -77,7 +77,7 @@ class ProductVariant extends DbObject {
 
     /**
      * Find a product variant by product.
-     * @return ProductVariant[]
+     * @return Variant[]
      */
     public static function byProductId(PlmDB $db, int $product_id): ?array
     {
@@ -89,7 +89,7 @@ class ProductVariant extends DbObject {
             $res = [];
 
             foreach ($result as $row) {
-                $res[] = new ProductVariant($row);
+                $res[] = new Variant($row);
             }
 
             return $res;
@@ -109,9 +109,9 @@ class ProductVariant extends DbObject {
     /**
      * Get the releated product
      */
-    public function fetchPartVersion(PlmDB $db): ?PartVersion
+    public function fetchRevision(PlmDB $db): ?Revision
     {
-        return PartVersion::byPK($db, $this->partVersionId);
+        return Revision::byPK($db, $this->revisionId);
     }
 
     /**
@@ -125,7 +125,7 @@ class ProductVariant extends DbObject {
                 'variant_id' => $this->name,
                 'product_id' => $this->productId,
                 'description' => $this->description,
-                'part_version_id' => $this->partVersionId
+                'part_version_id' => $this->revisionId
             ]);
 
             $this->pk = $db->lastInsertedId('plm_product_variant');
@@ -137,7 +137,7 @@ class ProductVariant extends DbObject {
                 'variant_id' => $this->name,
                 'product_id' => $this->productId,
                 'description' => $this->description,
-                'part_version_id' => $this->partVersionId
+                'part_version_id' => $this->revisionId
             ]);
         }
     }

@@ -3,8 +3,7 @@
         <nav class="navigation" >
             <button :class="{ 'selected' : view == 'products' }" @click="loadView('products')">Products</button>
             <button :class="{ 'selected' : view == 'parts' }" @click="loadView('parts')">Parts</button>
-            <button :class="{ 'selected' : view == 'bom' }" >BOM*</button>
-            <button :class="{ 'selected' : view == 'details' }" >Part Details*</button>
+            <button :class="{ 'selected' : view == 'revision' }" >BOM*</button>
             <button :class="{ 'selected' : view == 'companies' }" @click="loadView('companies')">Companies</button>
             <button :class="{ 'selected' : view == 'masterdata' }" @click="loadView('masterdata')">Master Data</button>
         </nav>

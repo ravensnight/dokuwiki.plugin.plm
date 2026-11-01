@@ -15,10 +15,15 @@ class Masterdata {
 
         /** Load categories */
         this.categories = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/categories',
+            'content/categories',
             {
                 'title' : "Category",
-                'features': { 'create' : {}, 'edit' : {} },
+                'actions': { 
+                    'edit' : {
+                        'icon': 'fa fa-pencil-square-o',
+                        'callback': (item) => this.editCategory(item)
+                    } 
+                },
                 'fields' : [
                     {
                         'name': 'id',
@@ -106,10 +111,10 @@ class Masterdata {
 
         /** Load status */
         this.status = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/status',
+            'content/status',
             {
                 'title': "Status",
-                'features': {},
+                'actions': {},
                 'fields': fieldList
             },
             defaults
@@ -119,10 +124,10 @@ class Masterdata {
 
         /** Load company types */
         this.companyTypes = new ItemContainer(
-            '/doku.php?plm=/api/v1/content/companytypes',
+            'content/companytypes',
             {
                 'title': "Company Type",
-                'features': {},
+                'actions': {},
                 'fields': fieldList
             },
             defaults
@@ -130,5 +135,9 @@ class Masterdata {
 
         await this.companyTypes.loadItems();
 
+    }
+
+    async editCategory(item) {
+        return await this.categories.doEdit(item);
     }
 }
