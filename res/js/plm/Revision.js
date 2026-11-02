@@ -7,6 +7,8 @@ class Revision  {
         this.statusList = null;
         this.categories = null;
         this.revision = null;
+        this.variantList = null;
+        this.selectedChild = null;
     }
 
     async setup() {
@@ -70,9 +72,11 @@ class Revision  {
                         "editable" : true
                     },
                     {
-                        "name": "variants",
+                        "name": "variantIDs",
                         "label": "Variants",
-                        "editable" : true
+                        "editable" : false,
+                        "select" : true,
+                        "value" : (item) => { return this.getVariantsField(item); }
                     },
                     {
                         "name": "statusId",
@@ -113,7 +117,7 @@ class Revision  {
         if (this.categories == null) return false;
 
         const found = this.categories.find(entry => entry.id == categoryId);
-        console.log("hasChildten: " + found.composite);
+        // console.log("hasChildten: " + found.composite);
         return found.composite;
     }
 
@@ -131,6 +135,24 @@ class Revision  {
         return found.name;
     }
 
+    async getVariantsField(bomItem) {
+        var res = null;
+
+        for (var entry of bomItem.variantIDs) {
+            if (res == null) {
+                res = `${entry}`;
+            } 
+            else {
+                res = `${res}, ${entry}`;
+            }
+        }
+
+        if (res == null) res = 'any';
+        // console.log(JSON.stringify(bomItem));
+
+        return res;
+    }
+
     async doEdit(childItem) {
         return await this.childList.doEdit(childItem);  
     }
@@ -144,17 +166,23 @@ class Revision  {
         if (childItem != null) {
             switch (field) {
                 case 'revisionTag' : 
-                    this.appControl.loadView('revision', childItem);                    
+                    this.appControl.loadView('revision', childItem.id);                    
                     return;
 
                 case 'isChild':
                     this.childAddRemove(childItem);
                     return;
 
+                case 'variantIDs':
+                    this.editVariants(childItem);
+                    return;
+
                 default:
                     console.log("Selected " + JSON.stringify(childItem));
                     return;
             }
+        } else {
+            this.editVariants(null);
         }
     }
 
@@ -171,9 +199,89 @@ class Revision  {
 
         var api = new Api(this.baseuri);
         await api.put(childItem.id, {
+            'parentId' : this.revision.id,
             'quantity' : childItem.quantity
         })
 
         this.childList.loadItems(true);
+    }
+
+    async editVariants(childItem) {
+        if (childItem == null) {
+            this.selectedChild = null;
+            this.variantList = null;
+            return;
+        }
+ 
+        if (this.variantList == null) {
+            this.variantList = new ItemContainer('content/variants', {
+                "title" : "Child Item Variants",
+                "actions" : {},
+                "select" : (item) => this.selectVariantEntry(item),
+                'fields': [
+                    {
+                        'name': 'id',
+                        'label': 'ID',
+                    },
+                    {
+                        'name': 'name',
+                        'label': 'Name',
+                        'select': true,
+                        'editable': true,
+                    },
+                    {
+                        'name': 'description',
+                        'label': 'Description',
+                        'editable': true,
+                    },
+                    {
+                        'name': 'productId',
+                        'label': 'Product ID',
+                        'hidden': true
+                    },
+                    {
+                        'name': 'revisionTag',
+                        'label': 'Root Part',
+                    },
+                    {
+                        'name' : 'assigned',
+                        'label' : 'Assigned to child',
+                        'html': (variantItem) => { return this.selectedChild.variantIDs.includes(variantItem.id) ? "<i class='fa fa-check-square-o' >" : "<i class='fa fa-square-o' >"; },
+                        'select' : true
+                    }
+                ]
+            },
+            null);
+        }
+
+        this.selectedChild = childItem;
+        await this.variantList.loadItems(true);
+    }
+
+    async selectVariantEntry(variantItem) {
+        if ((this.childList.current == null) || (variantItem == null)) {
+            return;
+        }
+
+        var variantId = variantItem.id;
+        var childItem = this.childList.current;
+
+        if (childItem.variantIDs.includes(variantId)) {
+            // remove variant id
+            var index = childItem.variantIDs.indexOf(variantId);
+            if (index > -1) {
+                childItem.variantIDs.splice(index, 1);
+            }
+        } 
+        else {
+            // add variant id
+            childItem.variantIDs.push(variantId);
+        }
+
+        var api = new Api(this.baseuri);
+        await api.put(childItem.id, {
+            'parentId' : this.revision.id,
+            'variantIDs' : childItem.variantIDs
+        });
     }
 }

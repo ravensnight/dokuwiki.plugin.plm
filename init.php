@@ -20,6 +20,7 @@ require_once(__DIR__ . '/src/persist/Category.php');
 require_once(__DIR__ . '/src/persist/Status.php');
 require_once(__DIR__ . '/src/persist/Part.php');
 require_once(__DIR__ . '/src/persist/PartItemRef.php');
+require_once(__DIR__ . '/src/persist/PartItemVariant.php');
 require_once(__DIR__ . '/src/persist/Revision.php');
 require_once(__DIR__ . '/src/persist/Product.php');
 require_once(__DIR__ . '/src/persist/Variant.php');

@@ -64,7 +64,7 @@ class PlmMgrBOM extends PlmMgrBase {
     /**
      * Creates an array representation of a version
      *
-     * @param Revision 
+     * @param Revision
      * @param ?int
      * @return array
      */
@@ -85,7 +85,7 @@ class PlmMgrBOM extends PlmMgrBase {
         }
 
         /** @var Variant[] */
-        $variantNames = [];
+        $variantIDs = [];
         $quantity = 0;
         $designators = '';
 
@@ -95,16 +95,12 @@ class PlmMgrBOM extends PlmMgrBase {
 
             $variants = $itemRef->fetchVariants($db);
             foreach ($variants as $var) {
-                $variantNames[] = $var->name;
-            }
-
-            if (empty($variantNames)) {
-                $variantNames[] = '*';
+                $variantIDs[] = $var->pk;
             }
         }
 
         return [
-            "id" => $childVersion->pk,            
+            "id" => $childVersion->pk,
             "parentId" => $parentKey,
             "revisionTag" => $childVersion->revisionTag,
             "partId" => $childVersion->partId,
@@ -114,7 +110,7 @@ class PlmMgrBOM extends PlmMgrBase {
             "statusId" => $childVersion->statusId,
             "quantity" => $quantity,
             "designators" => $designators,
-            'variants' => implode(",", $variantNames)
+            'variantIDs' => $variantIDs
         ];
     }
 
@@ -125,26 +121,49 @@ class PlmMgrBOM extends PlmMgrBase {
 
         $childId = static::id($inputData);
         if ($childId === null) {
-            throw new Exception("Child Key/ID mus not be NULL to update a bom element.");
+            throw new Exception("Child Key/ID must not be NULL to update a bom element.");
         }
 
         if (!isset($inputData['parentId'])) {
-            throw new Exception("Partent Key/ID must not be NULL to update a bom element.");
+            throw new Exception("Parent Key/ID must not be NULL to update a bom element.");
         }
 
-        $parentId = $inputData['parentId'];       
+        $parentId = $inputData['parentId'];
 
+        // Assign quantity
         $quantity = $inputData['quantity'];
-        if ($quantity === null) {
-            throw new Exception("Quantity needs to be set to edit a bom item");
+        if ($quantity !== null) {
+            if ($quantity > 0) {
+                PartItemRef::addChild($db, $parentId, $childId, $quantity);
+            }
+            else {
+                PartItemRef::removeChild($db, $parentId, $childId);
+            }
         }
-        else if ($quantity > 0) {
-            PartItemRef::addChild($db, $parentId, $childId, $quantity);
-        }
-        else {
-            PartItemRef::removeChild($db, $parentId, $childId);
+
+        // assign variant IDs
+        $variantIDs = $inputData['variantIDs'];
+        if ($variantIDs !== null) {
+            // First remove all existing variant assignments for this part item
+            $itemRef = PartItemRef::entry($db, $parentId, $childId);
+            if ($itemRef !== null) {
+            
+                // Get all current variants for this part item
+                $currentVariants = $itemRef->fetchVariants($db);
+                if ($currentVariants !== null) {
+                    foreach ($currentVariants as $currentVariant) {
+                        PartItemVariant::removeVariant($db, $itemRef->pk, $currentVariant->pk);
+                    }
+                }
+
+                // Then assign new variants
+                foreach ($variantIDs as $variantId) {
+                    PartItemVariant::assignVariant($db, $itemRef->pk, $variantId);
+                }
+            }
         }
 
         return $inputData;
     }
 }
+?>
