@@ -8,12 +8,14 @@ class Products {
         this.variants = null;
         this.variantParts = null;
         this.categories = null;
+        this.selectedCategory = null;
     }
 
     async setup() {
 
         var api = new Api('content/categories');
         this.categories = await api.all();
+        this.selectedCategory = -1;
 
         api = new Api('content/status');
         this.statusList = await api.all();
@@ -129,8 +131,9 @@ class Products {
             this.variantParts = new ItemContainer(
                 'content/versions',
                 {
-                    "title": "Assignable Part Versions",
+                    "title": null, // title is in html
                     'select': (partVersion, field) => this.selectRevision(partVersion, field),
+                    'filter' : (partVersion) => { return this.childFilter(partVersion); },
                     'actions': {
                     },
                     "fields": [
@@ -171,6 +174,11 @@ class Products {
         }
 
         await this.variantParts.loadItems(true);
+    }
+
+    childFilter(revision) {
+        if (this.selectedCategory == -1) return true;
+        return (this.selectedCategory == revision.partCategoryId);
     }
 
     async selectRevision(revision, field) {

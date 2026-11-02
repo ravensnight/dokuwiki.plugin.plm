@@ -9,6 +9,7 @@ class Revision  {
         this.revision = null;
         this.variantList = null;
         this.selectedChild = null;
+        this.selectedCategory = null;
     }
 
     async setup() {
@@ -22,6 +23,7 @@ class Revision  {
             var api = new Api('content/categories');
             this.categories = await api.all();
         }
+        this.selectedCategory = -1;
 
         // Assign Context to revision... now statusList is loaded.
         if (this.revisionId) {
@@ -42,8 +44,9 @@ class Revision  {
         this.childList = new ItemContainer(
             this.baseuri,
             {
-                "title": "Part Version Children",
+                "title": null, // title is set in html
                 'select': (item, field) => this.childSelect(item, field),
+                'filter': (item) => { return this.childFilter(item) },
                 'actions': {
                     "edit" : {
                         'icon': 'fa fa-pencil-square-o',
@@ -65,6 +68,11 @@ class Revision  {
                         "label": "Revision",
                         "select": true,
                         "html": (item) => { return `<span>${item.partDescription}</span><span class='small' >${item.revisionTag}</span>` }
+                    },
+                    {
+                        "name" : "partCategoryId",
+                        "label" : "Category",
+                        "choice" : this.categories
                     },
                     {
                         "name": "quantity",
@@ -160,6 +168,11 @@ class Revision  {
     async openPart(partId) {
         if (partId == null) return;
         await this.appControl.loadView('parts', partId);
+    }
+
+    childFilter(childItem) {
+        if (this.selectedCategory == -1) return true;
+        return (childItem.partCategoryId == this.selectedCategory);
     }
 
     async childSelect(childItem, field) {

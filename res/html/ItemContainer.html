@@ -18,7 +18,7 @@
             </tr>
         </thead>
         <template x-for="i in items" :key="i.id">
-            <tr :class="(current && current.id === i.id) ? 'selected' : ''" >
+            <tr :class="(current && current.id === i.id) ? 'selected' : ''" x-show="(metadata['filter'] == null) || (metadata.filter(i) == true)">
                 <template x-for="f in metadata.fields" :key="f.name">
                     <template x-if="!f.hidden">
                         <td :class="f.name">
