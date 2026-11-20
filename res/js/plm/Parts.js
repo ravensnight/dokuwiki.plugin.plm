@@ -5,9 +5,13 @@ class Parts {
         this.categories = null;
         this.statusList = null;
         this.parts = null;
+        this.manufacturer = null;
+        this.suppliers = null;
+        this.companyTypes = null;
         this.revisions = null;
         this.childList = null;
         this.partId = partId;
+        this.partSelected = null;
         this.tab = 'revisions';
     }
 
@@ -20,6 +24,11 @@ class Parts {
         if (this.statusList == null) {
             var api = new Api('content/status');
             this.statusList = await api.all();
+        }
+
+        if (this.companyTypes == null) {
+            var api = new Api('content/companytypes');
+            this.companyTypes = await api.all();
         }
 
         this.parts = new ItemContainer(
@@ -75,6 +84,7 @@ class Parts {
     async selectPart(part, field) {
 
         this.revisionSelect(null, null);
+        this.partSelected = part;
 
         if (!part) {
             this.revisions = null;
@@ -109,7 +119,7 @@ class Parts {
                             "label" : "Revision",
                             "editable" : true,
                             'select' : true,
-                            "html": (item) => { return `<span>${item.revisionTag}</span><span class='small' >${item.partDescription}</span>` }
+                            "html": (item) => { return `<span>${item.revisionTag}</span><span class='small' >${item.part_description}</span>` }
                         },
                         {
                             "name": "statusId",
@@ -123,7 +133,7 @@ class Parts {
                             "editable": true,
                         },
                         {
-                            "name": "partId",
+                            "name": "part_id",
                             "label": "Part ID",
                             "editable": false,
                             "hidden": true,
@@ -138,6 +148,53 @@ class Parts {
         }
 
         await this.revisions.loadFiltered({ "partId": part.id });
+
+        if (this.manufacturer == null) {
+            this.manufacturer = new ItemContainer(
+                'content/companies',
+                {
+                    "title": null,
+                    'select': (item, field) => this.manufacturerSelect(item, field),
+                    "actions": null,
+                    'fields': [
+                        {
+                            'name': 'id',
+                            'label': 'ID',
+                        },
+                        {
+                            'name' : 'name',
+                            'label' : 'Name',
+                            'select' : true
+                        },
+                        {
+                            'name': 'description',
+                            'label': 'Description',
+                        },
+                        {
+                            'name': 'typeId',
+                            'label': 'Type ID',
+                            'choice': this.companyTypes,
+                        },
+                        {
+                            'name': 'isManufacturer',
+                            'label': 'Is Manufacturer',
+                            'select': true,
+                            'html': (item) => { return this.isPartManufacturer(item) ? "<i class='fa fa-check-square-o' >" : "<i class='fa fa-square-o' >"; }
+                        }
+                    ]                   
+                },
+                null
+            );
+        }
+
+        await this.manufacturer.loadItems(true);
+    }
+
+    async isPartManufacturer(manufacturerId) {
+        if (this.partSelected != null) return false;
+        
+        var index = this.partSelected.manufacturer.findIndex(item => item.id == manufacturerId);
+        return (index >= 0);
     }
 
     async revisionSelect(item, field) {
@@ -146,4 +203,7 @@ class Parts {
         }
     } 
 
+    async manufacturerSelect(item, field) {
+        console.log("Selected: " + JSON.stringify(item));
+    }
 }

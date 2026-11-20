@@ -14,14 +14,14 @@
             <h3>Master Part Selection</h3>
             <ul class="radio-choice">
                 <li>
-                    <input type="radio" :value="-1" :id="_all" x-model="selectedCategory" />
+                    <input type="radio" value="-1" id="_all" x-model="selectedCategory" />
                     <label :for="_all">All</label>
                 </li>
             
                 <template x-for="cat in categories">
                     <li>
                         <input type="radio" :value="cat.id" :id="cat.id" x-model="selectedCategory" />
-                        <label :for="cat.id" x-text="`${cat.name}`"></label>
+                        <label for="cat.id" x-text="`${cat.name}`"></label>
                     </li>
                 </template>
             </ul>

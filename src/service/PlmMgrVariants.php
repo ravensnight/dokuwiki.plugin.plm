@@ -10,12 +10,16 @@ class PlmMgrVariants extends PlmMgrBase {
 
         if ($key === null) {
             $prodId = PlmMgrBase::productId($params);
+            $varName = PlmMgrBase::variantName($params);
 
-            if ($prodId === null) {
-                return $this->getAll($db);
+            if ($prodId !== null) {
+                return $this->forProductId($db, $prodId);
+            }
+            elseif ($varName !== null) {
+                return $this->forVariantName($db, $varName);
             }
             else {
-                return $this->forProductId($db, $prodId);
+                return $this->getAll($db);
             }
         }
         else {
@@ -23,7 +27,7 @@ class PlmMgrVariants extends PlmMgrBase {
         }
     }
 
-    protected function getAll(PlmDB $db) : array {
+    public function getAll(PlmDB $db) : array {
         /** @var Variant[] $versions */
         $versions = Variant::entries($db);
 
@@ -35,7 +39,7 @@ class PlmMgrVariants extends PlmMgrBase {
         return $result;
     }
 
-    protected function forPk(PlmDB $db, int $key) : ?array {
+    public function forPk(PlmDB $db, int $key) : ?array {
         $v = Variant::byPk($db, $key);
         if ($v === null) {
             return null;
@@ -43,7 +47,7 @@ class PlmMgrVariants extends PlmMgrBase {
         return $this->createVariantData($v);
     }
 
-    protected function forProductId(PlmDB $db, int $prodId) : ?array {
+    public function forProductId(PlmDB $db, int $prodId) : ?array {
         $variants = Variant::byProductId($db, $prodId);
         $result = [];
 
@@ -54,6 +58,16 @@ class PlmMgrVariants extends PlmMgrBase {
         }
 
         return $result;
+    }
+
+    public function forVariantName(PlmDB $db, string $variantName) : ?array {
+        $v = Variant::byName($db, $variantName);
+
+        if ($v === null) {
+            return null;
+        }
+
+        return $this->createVariantData($v);
     }
 
     /**

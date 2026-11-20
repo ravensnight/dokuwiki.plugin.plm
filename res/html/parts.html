@@ -16,7 +16,18 @@
             </div>
         
             <div x-show="tab == 'sourcing'" class="tabcontent">
-                <p class="info">Not yet filled.</p>
+                <template x-if="manufacturer != null">
+                    <div x-data="manufacturer" >
+                        <h3 x-text="`Part Manufacturer for ${partSelected.ipn}`"></h3>
+                        <div x-html="html()"></div>
+                    </div>
+                </template>
+                <template x-if="suppliers != null">
+                    <div x-data="suppliers">
+                        <h3>Supplier List</h3>
+                        <div x-data="suppliers" x-html="html()"></div>
+                    </div>
+                </template>
             </div>
         </section>
     </template>

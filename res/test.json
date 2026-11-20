@@ -1,0 +1,158 @@
+[
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 4,
+            "parentId": 30,
+            "revisionTag": "ASY-MC1210F-FPNL-WHT / Rev. A",
+            "partId": 8,
+            "partIPN": "ASY-MC1210F-FPNL-WHT",
+            "partDescription": "MC1210F Frontpanel White",
+            "partCategoryId": 4,
+            "statusId": 2,
+            "quantity": 1,
+            "designators": "",
+            "variantIDs": [
+                2
+            ]
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 3,
+            "parentId": 30,
+            "revisionTag": "ASY-MC1210F-FPNL-BLK / Rev. A",
+            "partId": 7,
+            "partIPN": "ASY-MC1210F-FPNL-BLK",
+            "partDescription": "MC1210F Frontpanel Black",
+            "partCategoryId": 4,
+            "statusId": 2,
+            "quantity": 1,
+            "designators": "",
+            "variantIDs": [
+                1
+            ]
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 17,
+            "parentId": 30,
+            "revisionTag": "HMI-KNOB-T18-15MM / Rev. A",
+            "partId": 6,
+            "partIPN": "HMI-KNOB-T18-15MM",
+            "partDescription": "Rotary Knob T18 dia=15mm ",
+            "partCategoryId": 7,
+            "statusId": 2,
+            "quantity": 12,
+            "designators": "",
+            "variantIDs": []
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 12,
+            "parentId": 30,
+            "revisionTag": "HMI-MXCAP-RED / Rev. A",
+            "partId": 1,
+            "partIPN": "HMI-MXCAP-RED",
+            "partDescription": "MX-compatible keycap - RED",
+            "partCategoryId": 7,
+            "statusId": 2,
+            "quantity": 6,
+            "designators": "",
+            "variantIDs": [
+                2
+            ]
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 13,
+            "parentId": 30,
+            "revisionTag": "HMI-MXCAP-ORA / Rev. A",
+            "partId": 2,
+            "partIPN": "HMI-MXCAP-ORA",
+            "partDescription": "MX-compatible keycap - ORANGE",
+            "partCategoryId": 7,
+            "statusId": 2,
+            "quantity": 6,
+            "designators": "",
+            "variantIDs": [
+                2
+            ]
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 15,
+            "parentId": 30,
+            "revisionTag": "HMI-MXCAP-BLU / Rev. A",
+            "partId": 4,
+            "partIPN": "HMI-MXCAP-BLU",
+            "partDescription": "MX-compatible keycap - BLUE",
+            "partCategoryId": 7,
+            "statusId": 2,
+            "quantity": 6,
+            "designators": "",
+            "variantIDs": [
+                1
+            ]
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 16,
+            "parentId": 30,
+            "revisionTag": "HMI-MXCAP-DBL / Rev. A",
+            "partId": 5,
+            "partIPN": "HMI-MXCAP-DBL",
+            "partDescription": "MX-compatible keycap - DARK BLUE",
+            "partCategoryId": 7,
+            "statusId": 2,
+            "quantity": 6,
+            "designators": "",
+            "variantIDs": [
+                1
+            ]
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 18,
+            "parentId": 30,
+            "revisionTag": "ASY-MC1210F-BODY / Rev. A",
+            "partId": 18,
+            "partIPN": "ASY-MC1210F-BODY",
+            "partDescription": "MC1210F Body Assembly",
+            "partCategoryId": 4,
+            "statusId": 2,
+            "quantity": 1,
+            "designators": "",
+            "variantIDs": []
+        }
+    },
+    {
+        "fragmentUri": "pages/bomnode",
+        "revision": {
+            "id": 20,
+            "parentId": 30,
+            "revisionTag": "ASY-MC1210F-BTM / Rev. A",
+            "partId": 20,
+            "partIPN": "ASY-MC1210F-BTM",
+            "partDescription": "MC1210F Bottom Assembly",
+            "partCategoryId": 4,
+            "statusId": 2,
+            "quantity": 1,
+            "designators": "",
+            "variantIDs": []
+        }
+    }
+]

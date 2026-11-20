@@ -1,25 +1,27 @@
 function loadScript(src) {
     const script = document.createElement('script');
-    script.src = src;
+    script.src = DOKU_BASE + 'lib/plugins/plm/res/js/' + src;
     script.type = 'text/javascript';
     document.head.appendChild(script);
 }
 
 // init plm
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/init.js');
+loadScript('plm/init.js');
 
 // custom scripts
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Api.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Page.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/PageFragment.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/ItemContainer.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Revision.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Parts.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Products.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Companies.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/Masterdata.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/plm/AppControl.js');
+loadScript('plm/Api.js');
+loadScript('plm/PageFragment.js');
+loadScript('plm/ItemContainer.js');
+loadScript('plm/Revision.js');
+loadScript('plm/Parts.js');
+loadScript('plm/Products.js');
+loadScript('plm/Companies.js');
+loadScript('plm/Masterdata.js');
+loadScript('plm/Application.js');
+loadScript('plm/BomNode.js');
+loadScript('plm/BomControl.js');
+loadScript('plm/PlmManager.js');
 
 // frameworks
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/htmx.min.js');
-loadScript(DOKU_BASE + 'lib/plugins/plm/res/js/alpine.min.js');
+loadScript('htmx.min.js');
+loadScript('alpine.min.js');

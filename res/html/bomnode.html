@@ -1,0 +1,24 @@
+<div class="node">
+    <div class="name">
+        <template x-if="isComposite == true" >
+            <a class="toggle" href="#" @click.prevent="openClose()" >
+                <i x-show="open" class='fa fa-minus-square-o' ></i>
+                <i x-show="!open" class='fa fa-plus-square-o' ></i>
+            </a>
+        </template>
+        <template x-if="isComposite == false" >
+            <i class='fa fa-file-o' />
+        </template>
+        <a class="anchor" href="#" @click.prevent="$dispatch('node-details', revision)" x-text="`[${revision.id}] ${revision.part_description}`"></a>
+    </div>
+    <div class="attribute-list">
+    </div>
+
+    <div class="subnode-list" x-show="open" >
+        <template x-for="sn in subnodes" >
+            <div class="subnode" >
+                <div x-data="sn" x-html="html()" ></div>
+            </div>
+        </template>
+    </div>
+</div>

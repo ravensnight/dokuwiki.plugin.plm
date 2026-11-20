@@ -81,8 +81,14 @@ class Part extends DbObject {
     }
 
     /**
+     * Get all manufacturers assigned to this part
+     */
+    public function fetchManufacturers(PlmDB $db): ?array {
+        return PartManufacturer::byPartId($db, $this->pk);
+    }
+
+    /**
      * Save current part attributes to database
-     * If pk is empty, creates a new entry; otherwise updates existing
      */
     public function save(PlmDB $db): void
     {
@@ -91,9 +97,9 @@ class Part extends DbObject {
             $q = "INSERT INTO plm_part (ipn, category_id, description) VALUES (:ipn, :category_id, :description)";
 
             $db->querySingle($q, [
-                'ipn' => $this->ipn,
-                'category_id' => $this->categoryId,
-                'description' => $this->description
+                    'ipn' => $this->ipn,
+                    'category_id' => $this->categoryId,
+                    'description' => $this->description
             ]);
 
             // Get the newly created ID and assign it to this object
@@ -109,8 +115,8 @@ class Part extends DbObject {
                 'category_id' => $this->categoryId,
                 'description' => $this->description
             ]);
-        }
     }
+}
 
     /**
      * Save current part attributes to database

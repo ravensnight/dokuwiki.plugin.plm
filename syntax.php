@@ -106,8 +106,13 @@ class syntax_plugin_plm extends DokuWiki_Syntax_Plugin
             switch ($context->type) {
 
                 case 'bom':
-                    // plm:bom > MC1210F-BLACK                    
+                    // plm:bom2 > MC1210F-BLACK                    
                     $macro = new PlmBomMacro(PlmDB::get());
+                    break;
+
+                case 'bom2':
+                    // plm:bom > MC1210F-BLACK                    
+                    $macro = new PlmBom2(PlmDB::get());
                     break;
 
                 case 'manager':

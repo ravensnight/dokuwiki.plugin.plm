@@ -24,33 +24,18 @@ class PlmMgrParts extends PlmMgrBase
 
             $result = [];
             foreach ($parts as $p) {
-                $result[] = $this->createPartData($p);
+                $result[] = WebObjectsFactory::buildPartData($p);
             }
         } else {
             $p = Part::byPk($db, $key);
             if ($p === null) {
                 return null;
             }
-            return $this->createPartData($p);
+
+            return WebObjectsFactory::buildPartData($p);
         }
 
         return $result;
-    }
-
-    /**
-     * Creates an array representation of a part
-     *
-     * @param Part $p
-     * @return array
-     */
-    private function createPartData($p): array
-    {
-        return [
-            "id" => $p->pk,
-            "ipn" => $p->ipn,
-            "description" => $p->description,
-            "categoryId" => $p->categoryId
-        ];
     }
 
     /**
@@ -88,7 +73,7 @@ class PlmMgrParts extends PlmMgrBase
             error_log('Failed to create default version for part: ' . $e->getMessage(), 0);
         }
 
-        return $this->createPartData($part);
+        return WebObjectsFactory::buildPartData($part);
     }
 
     /**
@@ -120,14 +105,13 @@ class PlmMgrParts extends PlmMgrBase
 
         // Save to database
         $part->save($db);
-        return $this->createPartData($part);
+
+        return WebObjectsFactory::buildPartData($part);
     }
 
     /**
      * Update an existing part
-     *
      * @param array $data
-     * @return array
      */
     #[Override]
     public function delete(array $data): void

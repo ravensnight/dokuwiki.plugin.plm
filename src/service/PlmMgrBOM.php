@@ -7,12 +7,16 @@ class PlmMgrBOM extends PlmMgrBase {
     {
         $db = PlmDB::get();
         $key = $params['parentId'];
+        $pid = $this->id($params);
 
-        if ($key === null) {
-            return $this->getAll($db);
+        if ($pid !== null) {
+            return $this->getChildren($db, $pid);
+        }
+        elseif ($key !== null) {
+            return $this->getAssignableRevisions($db, $key);
         }
         else {
-            return $this->forVersionKey($db, $key);
+            return $this->getAll($db);
         }
     }
 
@@ -21,14 +25,48 @@ class PlmMgrBOM extends PlmMgrBase {
         $versions = Revision::entries($db);
 
         $result = [];
-        foreach ($versions as $v) {
-            $result[] = $this->createVersionData($v, null);
+        foreach ($versions as $rev) {
+            $result[] = WebObjectsFactory::buildBOMNodeData($rev, null);
         }
 
         return $result;
     }
 
-    protected function forVersionKey(PlmDB $db, int $parentKey) : ?array {
+    /**
+     * Find all revisions that can be assigned to the given $parentKey
+     */
+    protected function getChildren(PlmDB $db, int $parentId) : ?array {
+
+        $db = PlmDB::get();
+
+        /** @var Revision */
+        $parentVersion = Revision::byPk($db, $parentId);
+        if ($parentVersion === null) {
+            return null;
+        }
+
+        /** @var PartItemRef[] */
+        $childrenRef = $parentVersion->fetchChildren($db);
+
+        if ($childrenRef !== null) {
+            $res = [];
+            foreach ($childrenRef as $child) {
+
+                $rev = $child->fetchChild($db);
+                if ($rev === null) continue;
+
+                $res[] = WebObjectsFactory::buildBOMNodeData($rev, $parentId);
+            }
+
+            return $res;
+        }
+
+        return NULL;
+    }    
+    /**
+     * Find all revisions that can be assigned to the given $parentKey
+     */
+    protected function getAssignableRevisions(PlmDB $db, int $parentKey) : ?array {
 
         $db = PlmDB::get();
 
@@ -52,66 +90,13 @@ class PlmMgrBOM extends PlmMgrBase {
         if ($children !== null) {
             $res = [];
             foreach ($children as $child) {
-                $res[] = $this->createVersionData($child, $parentVersion->pk);
+                $res[] = WebObjectsFactory::buildBOMNodeData($child, $parentVersion->pk);
             }
 
             return $res;
         }
 
         return null;
-    }
-
-    /**
-     * Creates an array representation of a version
-     *
-     * @param Revision
-     * @param ?int
-     * @return array
-     */
-    private function createVersionData(Revision $childVersion, ?int $parentKey): array
-    {
-        $db = PlmDB::get();
-
-        /** @var Part */
-        $part = $childVersion->fetchPart($db);
-
-        /** @var Category */
-        $category = $part->fetchCategory($db);
-
-        /** @var ?PartItemRef */
-        $itemRef = null;
-        if ($parentKey !== null) {
-            $itemRef = PartItemRef::entry($db, $parentKey, $childVersion->pk);
-        }
-
-        /** @var Variant[] */
-        $variantIDs = [];
-        $quantity = 0;
-        $designators = '';
-
-        if ($itemRef !== null) {
-            if (isset($itemRef->quantity)) $quantity = $itemRef->quantity;
-            if (isset($itemRef->designators)) $designators = $itemRef->designators;
-
-            $variants = $itemRef->fetchVariants($db);
-            foreach ($variants as $var) {
-                $variantIDs[] = $var->pk;
-            }
-        }
-
-        return [
-            "id" => $childVersion->pk,
-            "parentId" => $parentKey,
-            "revisionTag" => $childVersion->revisionTag,
-            "partId" => $childVersion->partId,
-            "partIPN" => $part->ipn,
-            "partDescription" => $part->description,
-            "partCategoryId" => $category->pk,
-            "statusId" => $childVersion->statusId,
-            "quantity" => $quantity,
-            "designators" => $designators,
-            'variantIDs' => $variantIDs
-        ];
     }
 
     #[Override]

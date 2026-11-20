@@ -2,12 +2,6 @@
 
 class ContentApi extends AbstractApi {
 
-    #[Override]
-    function __construct(ResponseWriter $out)
-    {
-        parent::__construct($out);        
-    }
-
     /**
      * @param array $nodePath
      */

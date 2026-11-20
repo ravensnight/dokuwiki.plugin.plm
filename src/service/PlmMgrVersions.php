@@ -29,7 +29,7 @@ class PlmMgrVersions extends PlmMgrBase {
 
         $result = [];
         foreach ($versions as $v) {
-            $result[] = $this->createVersionData($v);
+            $result[] = WebObjectsFactory::buildRevisionData($v);
         }
 
         return $result;
@@ -40,7 +40,8 @@ class PlmMgrVersions extends PlmMgrBase {
         if ($v === null) {
             return null;
         }
-        return $this->createVersionData($v);
+
+        return WebObjectsFactory::buildRevisionData($v);
     }
 
     protected function forPartId(PlmDB $db, int $partId) : ?array {
@@ -49,35 +50,11 @@ class PlmMgrVersions extends PlmMgrBase {
 
         if ($versions !== null) {
             foreach ($versions as $v) {
-                $result[] = $this->createVersionData($v);
+                $result[] = WebObjectsFactory::buildRevisionData($v);
             }
         }
 
         return $result;
-    }
-
-    /**
-     * Creates an array representation of a version
-     *
-     * @param Revision $v
-     * @return array
-     */
-    private function createVersionData($v): array
-    {
-        $db = PlmDB::get();
-        $p = $v->fetchPart($db);
-        $c = $p->fetchCategory($db);
-
-        return [
-            "id" => $v->pk,
-            "revisionTag" => $v->revisionTag,
-            "reference" => $v->reference,
-            "statusId" => $v->statusId,
-            "partId" => $v->partId,
-            "partIPN" => $p->ipn,
-            "partDescription" => $p->description,
-            "partCategoryId" => $c->pk
-        ];
     }
 
     public function delete(array $inputData): void
@@ -141,7 +118,7 @@ class PlmMgrVersions extends PlmMgrBase {
         $v->save($db);
 
         // Return the updated version data
-        return $this->createVersionData($v);
+        return WebObjectsFactory::buildRevisionData($v);
     }
 
     #[Override]
@@ -167,7 +144,7 @@ class PlmMgrVersions extends PlmMgrBase {
         $createdVersion = Revision::createNew($part, $stat, $revisionTag, $inputData['reference']);
         $createdVersion->save($db);
 
-        return $this->createVersionData($createdVersion);
+        return WebObjectsFactory::buildRevisionData($createdVersion);
     }
 
     

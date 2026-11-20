@@ -145,16 +145,12 @@ class Products {
                             "name": "revisionTag",
                             "label": "Revision",
                             'select': true,
-                            "html": (item) => { return `<span>${item.partDescription}</span><span class='small' >${item.revisionTag}</span>` }
+                            "html": (item) => { return `<span>${item.part_description}</span><span class='small' >${item.revisionTag}</span>` }
                         },
                         {
-                            'name': 'partCategoryId',
+                            'name': 'part_categoryId',
                             'label': 'Category',
                             'choice': this.categories,
-                        },
-                        {
-                            "name": "reference",
-                            "label": "Reference",
                         },
                         {
                             "name": "statusId",
@@ -184,7 +180,10 @@ class Products {
     async selectRevision(revision, field) {
         switch (field) {
             case 'revisionTag':
-                await this.appControl.loadView('revision', revision.id);
+                await this.appControl.loadView('revision', {
+                    'revisionId' : revision.id,
+                    'parentPath' : null
+                });
                 break;
 
             case 'assign':

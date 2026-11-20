@@ -21,6 +21,8 @@ require_once(__DIR__ . '/src/persist/Status.php');
 require_once(__DIR__ . '/src/persist/Part.php');
 require_once(__DIR__ . '/src/persist/PartItemRef.php');
 require_once(__DIR__ . '/src/persist/PartItemVariant.php');
+require_once(__DIR__ . '/src/persist/PartManufacturer.php');
+require_once(__DIR__ . '/src/persist/PartSupplier.php');
 require_once(__DIR__ . '/src/persist/Revision.php');
 require_once(__DIR__ . '/src/persist/Product.php');
 require_once(__DIR__ . '/src/persist/Variant.php');
@@ -30,6 +32,7 @@ require_once(__DIR__ . '/src/persist/CompanyType.php');
 // 3. Factories (Base for constructing components)
 require_once(__DIR__ . '/src/service/HtmlBaseFactory.php');
 
+require_once(__DIR__ . '/src/service/WebObjectsFactory.php');
 require_once(__DIR__ . '/src/service/PlmMgrBase.php');
 require_once(__DIR__ . '/src/service/PlmMgrParts.php');
 require_once(__DIR__ . '/src/service/PlmMgrVersions.php');
@@ -52,6 +55,7 @@ require_once(__DIR__ . '/src/macro/RenderContext.php');
 require_once(__DIR__ . '/src/macro/PlmMacro.php');
 require_once(__DIR__ . '/src/macro/PlmBuilderMacro.php');
 require_once(__DIR__ . '/src/macro/PlmBomMacro.php');
+require_once(__DIR__ . '/src/macro/PlmBom2.php');
 require_once(__DIR__ . '/src/macro/PlmManager.php');
 
 

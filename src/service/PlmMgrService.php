@@ -76,7 +76,7 @@ class PlmMgrService {
      * @param string $view
      * @return array
      */
-    public function getData(string $view, array $params): array {
+    public function getData(string $view, array $params): ?array {
 
         $subService = $this->getSubService($view);
         if ($subService) {

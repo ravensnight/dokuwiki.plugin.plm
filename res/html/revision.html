@@ -2,6 +2,15 @@
     <template x-if="revision">
         <section class="details">
             <h2 x-text="revision.revisionTag" ></h2>
+
+            <ul class="breadcrumbs" x-show="breadcrumbs">
+                <template x-for="b in breadcrumbs" >
+                    <li>
+                        <a href="#" @click.prevent="openParent(b.id)" x-text="b.name"></a>
+                    </li>
+                </template>
+            </ul>
+
             <h3 >Revision Details</h3>
             <table>
                 <thead>
@@ -18,12 +27,12 @@
                     <tr class="id" >
                         <td class="id" x-text="revision.id" ></td>
                         <td class="part" >
-                            <a href="#" @click.prevent="openPart(revision.partId)" >
-                                <span x-text="revision.partIPN" ></span>
-                                <span class="small" x-text="revision.partDescription"></span>
+                            <a href="#" @click.prevent="openPart(revision.part_id)" >
+                                <span x-text="revision.part_ipn" ></span>
+                                <span class="small" x-text="revision.part_description"></span>
                             </a>
                         </td>
-                        <td class="category" x-text="getCategoryName(revision.partCategoryId)"></td>
+                        <td class="category" x-text="getCategoryName(revision.part_categoryId)"></td>
                         <td class="revision" x-text="revision.revisionTag" ></td>
                         <td class="reference" x-text="revision.reference"></td>
                         <td class="status" x-text="getStatusName(revision.statusId)"></td>
@@ -41,8 +50,8 @@
             <h3>Part Version Children</h3>
             <ul class="radio-choice" >
                 <li>
-                    <input type="radio" :value="-1" :id="_all" x-model="selectedCategory" />
-                    <label :for="_all" >All</label>
+                    <input type="radio" value="-1" id="_all" x-model="selectedCategory" />
+                    <label for="_all" >All</label>
                 </li>
 
                 <template x-for="cat in categories" >

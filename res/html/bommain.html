@@ -1,0 +1,73 @@
+<div x-data='plmCreateBom(${context})' class="plm-bom">
+    <header></header>
+    <!-- HIER das Event abfangen, da <main> über dem Baum liegt -->
+    <main class="content" @node-details="setNodeDetails($event.detail)">
+        
+        <p x-show="loading == true">Loading...</p>
+
+        <template x-if="error">
+            <p class="error" x-text="error"></p>
+        </template>
+
+        <template x-if="loading == false">
+            <div class="bom-tree">
+                <h2 x-text="title"></h2>
+                <p x-text="`Variant: ${variant.name}`"></p>
+                <div x-data='partNode'>
+                    <div x-html="html()"></div>
+                </div>               
+            </div>
+        </template>                
+
+        <!-- Jetzt reagiert dieses Panel auf die Änderung von nodeDetails -->
+        <template x-if="nodeDetails != null">
+            <div class="bom-properties" >
+                <table>
+                    <tbody>
+                        <tr>
+                            <th>Revision-ID: </th>
+                            <td x-text="nodeDetails.id"></td>
+                        </tr>
+                        <tr>
+                            <th>Name: </th>
+                            <td x-text="nodeDetails.part_description"></td>
+                        </tr>
+                        <tr>
+                            <th>Revision Tag: </th>
+                            <td x-text="nodeDetails.revisionTag"></td>
+                        </tr>
+                        <tr>
+                            <th>IPN: </th>
+                            <td x-text="nodeDetails.part_ipn"></td>
+                        </tr>
+                        <tr>
+                            <th>Part-ID: </th>
+                            <td x-text="nodeDetails.part_id"></td>
+                        </tr>
+                        <tr>
+                            <th>Category: </th>
+                            <td x-text="nodeDetails.part_categoryId"></td>
+                        </tr>
+                        <tr>
+                            <th>Status: </th>
+                            <td x-text="nodeDetails.statusId"></td>
+                        </tr>
+                        <tr>
+                            <th>Quantity: </th>
+                            <td x-text="nodeDetails.quantity"></td>
+                        </tr>
+                        <tr>
+                            <th>Desginators: </th>
+                            <td x-text="nodeDetails.designators"></td>
+                        </tr>
+                        <tr>
+                            <th>Variant-IDs: </th>
+                            <td x-text="nodeDetails.variantIDs"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+
+    </main>
+</div>

@@ -1,9 +1,15 @@
 class Revision  {
 
-    constructor(appControl, revisionId) {
+    /**
+     * 
+     * @param {*} appControl 
+     * @param {*} context 
+     */
+    constructor(appControl, context) {        
         this.baseuri = `content/bom`;
         this.appControl = appControl;
-        this.revisionId = revisionId;
+        this.context = context;
+        this.breadcrumbs = [];
         this.statusList = null;
         this.categories = null;
         this.revision = null;
@@ -25,17 +31,34 @@ class Revision  {
         }
         this.selectedCategory = -1;
 
+
         // Assign Context to revision... now statusList is loaded.
-        if (this.revisionId) {
+        var revisionId = this.context['revisionId'];
+        if (revisionId) {
             var api = new Api('content/versions');
-            this.revision = await api.get(this.revisionId);
+            this.revision = await api.get(revisionId);
         } else {
             this.revision = null;
         }
 
-        // check composite feature
-        if (this.revision) {
-            if (!this.hasChildren(this.revision.partCategoryId)) {
+        if (this.revision) {            
+
+            // build breadcrumbs
+            if (this.context['parentPath'] != null) {
+                this.breadcrumbs.push(...this.context.parentPath);
+            }
+
+            if (this.breadcrumbs.length >= 5) {
+                this.breadcrumbs.splice(0, (this.breadcrumbs.length - 4)); // remove the first
+            }
+
+            this.breadcrumbs.push({
+                'id' : this.revision.id,
+                'name' : this.revision.revisionTag
+            });
+
+            // check composite feature
+            if (!this.hasChildren(this.revision.part_categoryId)) {
                 this.childList = null;
                 return;
             }
@@ -67,10 +90,10 @@ class Revision  {
                         "name": "revisionTag",
                         "label": "Revision",
                         "select": true,
-                        "html": (item) => { return `<span>${item.partDescription}</span><span class='small' >${item.revisionTag}</span>` }
+                        "html": (item) => { return `<span>${item.part_description}</span><span class='small' >${item.revisionTag}</span>` }
                     },
                     {
-                        "name" : "partCategoryId",
+                        "name" : "part_categoryId",
                         "label" : "Category",
                         "choice" : this.categories
                     },
@@ -170,6 +193,23 @@ class Revision  {
         await this.appControl.loadView('parts', partId);
     }
 
+    async openParent(parentId) {
+        var idx = this.breadcrumbs.findIndex(item => item.id === parentId);
+
+        if ((idx >= 0) && (idx < this.breadcrumbs.length)) {
+            this.breadcrumbs.splice(idx, this.breadcrumbs.length - idx);
+
+            console.log("new parents: " + JSON.stringify(this.breadcrumbs));
+
+            this.appControl.loadView('revision', {
+                'revisionId' : parentId,
+                'parentPath' : this.breadcrumbs
+            });            
+        }
+
+        return;
+    }
+
     childFilter(childItem) {
         if (this.selectedCategory == -1) return true;
         return (childItem.partCategoryId == this.selectedCategory);
@@ -179,7 +219,10 @@ class Revision  {
         if (childItem != null) {
             switch (field) {
                 case 'revisionTag' : 
-                    this.appControl.loadView('revision', childItem.id);                    
+                    this.appControl.loadView('revision', {
+                        'revisionId' : childItem.id,
+                        'parentPath': this.breadcrumbs
+                    });                    
                     return;
 
                 case 'isChild':
@@ -258,7 +301,7 @@ class Revision  {
                     },
                     {
                         'name' : 'assigned',
-                        'label' : 'Assigned to child',
+                        'label' : 'Applies to Variant',
                         'html': (variantItem) => { return this.selectedChild.variantIDs.includes(variantItem.id) ? "<i class='fa fa-check-square-o' >" : "<i class='fa fa-square-o' >"; },
                         'select' : true
                     }
